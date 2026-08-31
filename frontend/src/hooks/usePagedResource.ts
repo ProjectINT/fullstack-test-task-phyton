@@ -24,70 +24,50 @@ export type PagedResource<T> = {
   refetch: (options?: RefetchOptions) => Promise<void>;
 };
 
+type PageState<T> = {
+  items: T[];
+  hasNext: boolean;
+};
+
+/**
+ * Разбор сырой выборки размером pageSize + 1: лишний элемент означает,
+ * что есть следующая страница.
+ */
+const toPageState = <T>(raw: T[], pageSize: number): PageState<T> => ({
+  items: raw.slice(0, pageSize),
+  hasNext: raw.length > pageSize,
+});
+
 /**
  * Пагинация поверх начальных данных, загруженных серверным компонентом
  * (app/page.tsx): первая отрисовка обходится без спиннера и запроса с клиента.
  *
- * `initialData` — сырая выборка размером pageSize + 1: лишний элемент
- * означает, что есть следующая страница (тот же приём в load ниже).
+ * `initialData` — та же сырая выборка pageSize + 1, что возвращает fetcher.
  */
 export const usePagedResource = <T>(
   fetcher: Fetcher<T>,
   initialData: T[],
   pageSize = DEFAULT_PAGE_SIZE
 ): PagedResource<T> => {
-  const [items, setItems] = useState<T[]>(() => initialData.slice(0, pageSize));
+  const [{ items, hasNext }, setPageState] = useState<PageState<T>>(() =>
+    toPageState(initialData, pageSize)
+  );
   const [offset, setOffset] = useState(0);
-  const [hasNext, setHasNext] = useState(initialData.length > pageSize);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  // Первую страницу уже загрузил сервер — первый запуск эффекта пропускаем.
-  const hasServerDataRef = useRef(true);
 
-  const load = useCallback(
-    (controller: AbortController) =>
-      // Запрашиваем на один элемент больше, чтобы узнать, есть ли следующая страница.
-      fetcher({ limit: pageSize + 1, offset, signal: controller.signal })
-        .then((data) => {
-          if (controller.signal.aborted) return;
-          if (data.length === 0 && offset > 0) {
-            // Страница опустела (например, после удаления) — возвращаемся назад.
-            setOffset(Math.max(0, offset - pageSize));
-            return;
-          }
-          setHasNext(data.length > pageSize);
-          setItems(data.slice(0, pageSize));
-          setError(null);
-        })
-        .catch((err: unknown) => {
-          if (controller.signal.aborted || isAbortError(err)) return;
-          setError(toUserMessage(err));
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) {
-            setIsRefreshing(false);
-          }
-        }),
-    [fetcher, pageSize, offset]
-  );
-
-  // Перезагрузка при смене страницы.
+  // fetcher держим в ref: смена его ссылки (инлайновая лямбда у потребителя)
+  // не должна перезапускать загрузку — она зависит только от страницы.
+  const fetcherRef = useRef(fetcher);
   useEffect(() => {
-    if (hasServerDataRef.current) {
-      hasServerDataRef.current = false;
-      return;
-    }
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setIsRefreshing(true);
-    void load(controller);
-    return () => controller.abort();
-  }, [load]);
+    fetcherRef.current = fetcher;
+  }, [fetcher]);
 
-  const refetch = useCallback(
-    async ({ silent = false }: RefetchOptions = {}) => {
+  const abortRef = useRef<AbortController | null>(null);
+
+  /** Единственная точка загрузки: отменяет предыдущий запрос и ведёт спиннер и ошибку. */
+  const load = useCallback(
+    async (pageOffset: number, { silent = false }: RefetchOptions = {}) => {
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
@@ -97,9 +77,54 @@ export const usePagedResource = <T>(
         setError(null);
       }
 
-      await load(controller);
+      try {
+        // Запрашиваем на один элемент больше, чтобы узнать, есть ли следующая страница.
+        const raw = await fetcherRef.current({
+          limit: pageSize + 1,
+          offset: pageOffset,
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+
+        if (raw.length === 0 && pageOffset > 0) {
+          // Страница опустела (например, после удаления) — возвращаемся назад,
+          // смена offset сама запустит загрузку предыдущей страницы.
+          setOffset(Math.max(0, pageOffset - pageSize));
+          return;
+        }
+
+        setPageState(toPageState(raw, pageSize));
+        setError(null);
+      } catch (err: unknown) {
+        if (controller.signal.aborted || isAbortError(err)) return;
+        setError(toUserMessage(err));
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsRefreshing(false);
+        }
+      }
     },
-    [load]
+    [pageSize]
+  );
+
+  // Первую страницу уже загрузил сервер — загрузку при монтировании пропускаем.
+  const skipInitialLoadRef = useRef(true);
+
+  // Перезагрузка при смене страницы.
+  useEffect(() => {
+    if (skipInitialLoadRef.current) {
+      skipInitialLoadRef.current = false;
+      return;
+    }
+    void load(offset);
+  }, [load, offset]);
+
+  // Незавершённый запрос не должен пережить размонтирование.
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  const refetch = useCallback(
+    (options?: RefetchOptions) => load(offset, options),
+    [load, offset]
   );
 
   const prevPage = useCallback(
