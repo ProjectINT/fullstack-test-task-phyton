@@ -10,6 +10,7 @@ class AlertItem(BaseModel):
 
     id: int
     file_id: str
+    file_title: str
     level: AlertLevel
     message: str
     created_at: datetime

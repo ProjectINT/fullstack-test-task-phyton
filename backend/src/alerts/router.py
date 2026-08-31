@@ -15,4 +15,15 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 @router.get("", response_model=list[AlertItem])
 async def list_alerts_view(session: SessionDep, pagination: PaginationDep):
-    return await repository.list_alerts(session, limit=pagination.limit, offset=pagination.offset)
+    rows = await repository.list_alerts(session, limit=pagination.limit, offset=pagination.offset)
+    return [
+        AlertItem(
+            id=alert.id,
+            file_id=alert.file_id,
+            file_title=file_title,
+            level=alert.level,
+            message=alert.message,
+            created_at=alert.created_at,
+        )
+        for alert, file_title in rows
+    ]
