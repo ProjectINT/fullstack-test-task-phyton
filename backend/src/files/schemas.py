@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -16,7 +17,7 @@ class FileItem(BaseModel):
     processing_status: ProcessingStatus
     scan_status: ScanStatus | None
     scan_details: str | None
-    metadata_json: dict | None
+    metadata_json: dict[str, Any] | None
     requires_attention: bool
     created_at: datetime
     updated_at: datetime
