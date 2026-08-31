@@ -11,7 +11,6 @@ import { TablePagination, type PaginationControls } from "./TablePagination";
 
 type Props = {
   files: FileItem[];
-  isLoading: boolean;
   isRefreshing: boolean;
   error: string | null;
   pagination: PaginationControls;
@@ -22,7 +21,6 @@ type Props = {
 
 export function FilesTable({
   files,
-  isLoading,
   isRefreshing,
   error,
   pagination,
@@ -51,92 +49,84 @@ export function FilesTable({
       </Card.Header>
       <Card.Body className="px-4 pb-4">
         {error ? <Alert variant="danger">{error}</Alert> : null}
-        {isLoading ? (
-          <div className="d-flex justify-content-center py-5">
-            <Spinner animation="border" />
-          </div>
-        ) : (
-          <>
-            <div className={`table-responsive${isRefreshing ? " opacity-50" : ""}`}>
-              <Table hover bordered className="align-middle mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th>{t("columns.title")}</th>
-                    <th>{t("columns.file")}</th>
-                    <th>{t("columns.mime")}</th>
-                    <th>{t("columns.size")}</th>
-                    <th>{t("columns.status")}</th>
-                    <th>{t("columns.scan")}</th>
-                    <th>{t("columns.createdAt")}</th>
-                    <th></th>
+        <div className={`table-responsive${isRefreshing ? " opacity-50" : ""}`}>
+          <Table hover bordered className="align-middle mb-0">
+            <thead className="table-light">
+              <tr>
+                <th>{t("columns.title")}</th>
+                <th>{t("columns.file")}</th>
+                <th>{t("columns.mime")}</th>
+                <th>{t("columns.size")}</th>
+                <th>{t("columns.status")}</th>
+                <th>{t("columns.scan")}</th>
+                <th>{t("columns.createdAt")}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {files.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="text-center py-4 text-secondary">
+                    {t("empty")}
+                  </td>
+                </tr>
+              ) : (
+                files.map((file) => (
+                  <tr
+                    key={file.id}
+                    ref={file.id === highlightedFileId ? highlightedRowRef : null}
+                    className={file.id === highlightedFileId ? "table-warning" : undefined}
+                  >
+                    <td>
+                      <div className="fw-semibold">{file.title}</div>
+                    </td>
+                    <td>{file.original_name}</td>
+                    <td>{file.mime_type}</td>
+                    <td>{formatSize(file.size)}</td>
+                    <td>
+                      <StatusBadge kind="processing" value={file.processing_status} />
+                    </td>
+                    <td>
+                      <StatusBadge
+                        kind="scan"
+                        value={file.scan_status}
+                        title={file.scan_details}
+                      />
+                    </td>
+                    <td>{formatDate(file.created_at)}</td>
+                    <td className="text-nowrap">
+                      <div className="d-flex gap-1">
+                        <Button
+                          as="a"
+                          href={fileDownloadUrl(file.id)}
+                          variant="outline-primary"
+                          size="sm"
+                        >
+                          {t("download")}
+                        </Button>
+                        <Button
+                          variant="outline-secondary"
+                          size="sm"
+                          onClick={() => onRename(file)}
+                        >
+                          {t("rename")}
+                        </Button>
+                        <Button
+                          variant="outline-danger"
+                          size="sm"
+                          onClick={() => onDelete(file)}
+                        >
+                          {t("delete")}
+                        </Button>
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {files.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="text-center py-4 text-secondary">
-                        {t("empty")}
-                      </td>
-                    </tr>
-                  ) : (
-                    files.map((file) => (
-                      <tr
-                        key={file.id}
-                        ref={file.id === highlightedFileId ? highlightedRowRef : null}
-                        className={file.id === highlightedFileId ? "table-warning" : undefined}
-                      >
-                        <td>
-                          <div className="fw-semibold">{file.title}</div>
-                        </td>
-                        <td>{file.original_name}</td>
-                        <td>{file.mime_type}</td>
-                        <td>{formatSize(file.size)}</td>
-                        <td>
-                          <StatusBadge kind="processing" value={file.processing_status} />
-                        </td>
-                        <td>
-                          <StatusBadge
-                            kind="scan"
-                            value={file.scan_status}
-                            title={file.scan_details}
-                          />
-                        </td>
-                        <td>{formatDate(file.created_at)}</td>
-                        <td className="text-nowrap">
-                          <div className="d-flex gap-1">
-                            <Button
-                              as="a"
-                              href={fileDownloadUrl(file.id)}
-                              variant="outline-primary"
-                              size="sm"
-                            >
-                              {t("download")}
-                            </Button>
-                            <Button
-                              variant="outline-secondary"
-                              size="sm"
-                              onClick={() => onRename(file)}
-                            >
-                              {t("rename")}
-                            </Button>
-                            <Button
-                              variant="outline-danger"
-                              size="sm"
-                              onClick={() => onDelete(file)}
-                            >
-                              {t("delete")}
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </Table>
-            </div>
-            <TablePagination {...pagination} />
-          </>
-        )}
+                ))
+              )}
+            </tbody>
+          </Table>
+        </div>
+        <TablePagination {...pagination} />
       </Card.Body>
     </Card>
   );

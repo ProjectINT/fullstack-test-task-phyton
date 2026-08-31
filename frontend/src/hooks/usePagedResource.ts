@@ -1,23 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PageParams } from "@/lib/api";
+import { DEFAULT_PAGE_SIZE, type PageParams } from "@/lib/api";
 import { isAbortError, toUserMessage } from "@/lib/errors";
-
-const DEFAULT_PAGE_SIZE = 20;
 
 type Fetcher<T> = (params: PageParams) => Promise<T[]>;
 
 export type RefetchOptions = {
-  /** Тихое обновление (поллинг): без спиннеров и затемнения таблицы. */
+  /** Тихое обновление (поллинг): без спиннера и затемнения таблицы. */
   silent?: boolean;
 };
 
 export type PagedResource<T> = {
   items: T[];
-  /** Первая загрузка: данных ещё нет, таблицу заменяет спиннер. */
-  isLoading: boolean;
-  /** Повторная загрузка: данные уже показаны, таблица не скрывается. */
+  /** Перезагрузка: данные уже показаны, таблица не скрывается. */
   isRefreshing: boolean;
   error: string | null;
   page: number;
@@ -28,18 +24,26 @@ export type PagedResource<T> = {
   refetch: (options?: RefetchOptions) => Promise<void>;
 };
 
+/**
+ * Пагинация поверх начальных данных, загруженных серверным компонентом
+ * (app/page.tsx): первая отрисовка обходится без спиннера и запроса с клиента.
+ *
+ * `initialData` — сырая выборка размером pageSize + 1: лишний элемент
+ * означает, что есть следующая страница (тот же приём в load ниже).
+ */
 export function usePagedResource<T>(
   fetcher: Fetcher<T>,
+  initialData: T[],
   pageSize = DEFAULT_PAGE_SIZE
 ): PagedResource<T> {
-  const [items, setItems] = useState<T[]>([]);
+  const [items, setItems] = useState<T[]>(() => initialData.slice(0, pageSize));
   const [offset, setOffset] = useState(0);
-  const [hasNext, setHasNext] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [hasNext, setHasNext] = useState(initialData.length > pageSize);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const hasLoadedRef = useRef(false);
+  // Первую страницу уже загрузил сервер — первый запуск эффекта пропускаем.
+  const hasServerDataRef = useRef(true);
 
   const load = useCallback(
     (controller: AbortController) =>
@@ -55,7 +59,6 @@ export function usePagedResource<T>(
           setHasNext(data.length > pageSize);
           setItems(data.slice(0, pageSize));
           setError(null);
-          hasLoadedRef.current = true;
         })
         .catch((err: unknown) => {
           if (controller.signal.aborted || isAbortError(err)) return;
@@ -63,21 +66,22 @@ export function usePagedResource<T>(
         })
         .finally(() => {
           if (!controller.signal.aborted) {
-            setIsLoading(false);
             setIsRefreshing(false);
           }
         }),
     [fetcher, pageSize, offset]
   );
 
-  // Начальная загрузка и перезагрузка при смене страницы.
+  // Перезагрузка при смене страницы.
   useEffect(() => {
+    if (hasServerDataRef.current) {
+      hasServerDataRef.current = false;
+      return;
+    }
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    if (hasLoadedRef.current) {
-      setIsRefreshing(true);
-    }
+    setIsRefreshing(true);
     void load(controller);
     return () => controller.abort();
   }, [load]);
@@ -89,11 +93,7 @@ export function usePagedResource<T>(
       abortRef.current = controller;
 
       if (!silent) {
-        if (hasLoadedRef.current) {
-          setIsRefreshing(true);
-        } else {
-          setIsLoading(true);
-        }
+        setIsRefreshing(true);
         setError(null);
       }
 
@@ -113,7 +113,6 @@ export function usePagedResource<T>(
 
   return {
     items,
-    isLoading,
     isRefreshing,
     error,
     page: Math.floor(offset / pageSize) + 1,

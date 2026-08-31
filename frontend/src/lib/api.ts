@@ -1,8 +1,14 @@
 import { ApiError, isAbortError, logApiError } from "./errors";
 import type { AlertItem, FileItem } from "./types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// В браузере доступен только NEXT_PUBLIC_* (инлайнится при сборке). На сервере
+// Next (серверные компоненты) бэкенд может быть доступен по другому хосту —
+// в docker-сети это http://backend:8000 — он задаётся runtime-переменной API_URL.
+const API_URL =
+  process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const REQUEST_TIMEOUT_MS = 30_000;
+
+export const DEFAULT_PAGE_SIZE = 20;
 
 export type PageParams = {
   limit?: number;

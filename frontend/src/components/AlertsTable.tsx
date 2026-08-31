@@ -9,7 +9,6 @@ import { TablePagination, type PaginationControls } from "./TablePagination";
 
 type Props = {
   alerts: AlertItem[];
-  isLoading: boolean;
   isRefreshing: boolean;
   error: string | null;
   pagination: PaginationControls;
@@ -19,7 +18,6 @@ type Props = {
 
 export function AlertsTable({
   alerts,
-  isLoading,
   isRefreshing,
   error,
   pagination,
@@ -40,62 +38,54 @@ export function AlertsTable({
       </Card.Header>
       <Card.Body className="px-4 pb-4">
         {error ? <Alert variant="danger">{error}</Alert> : null}
-        {isLoading ? (
-          <div className="d-flex justify-content-center py-5">
-            <Spinner animation="border" />
-          </div>
-        ) : (
-          <>
-            <div className={`table-responsive${isRefreshing ? " opacity-50" : ""}`}>
-              <Table hover bordered className="align-middle mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th>{t("columns.file")}</th>
-                    <th>{t("columns.level")}</th>
-                    <th>{t("columns.message")}</th>
-                    <th>{t("columns.createdAt")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {alerts.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="text-center py-4 text-secondary">
-                        {t("empty")}
-                      </td>
-                    </tr>
-                  ) : (
-                    alerts.map((item) => (
-                      <tr
-                        key={item.id}
-                        className={
-                          item.file_id === highlightedFileId ? "table-warning" : undefined
-                        }
+        <div className={`table-responsive${isRefreshing ? " opacity-50" : ""}`}>
+          <Table hover bordered className="align-middle mb-0">
+            <thead className="table-light">
+              <tr>
+                <th>{t("columns.file")}</th>
+                <th>{t("columns.level")}</th>
+                <th>{t("columns.message")}</th>
+                <th>{t("columns.createdAt")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {alerts.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="text-center py-4 text-secondary">
+                    {t("empty")}
+                  </td>
+                </tr>
+              ) : (
+                alerts.map((item) => (
+                  <tr
+                    key={item.id}
+                    className={
+                      item.file_id === highlightedFileId ? "table-warning" : undefined
+                    }
+                  >
+                    <td>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="p-0 text-decoration-none"
+                        title={t("showFileHint")}
+                        onClick={() => onFileClick(item.file_id)}
                       >
-                        <td>
-                          <Button
-                            variant="link"
-                            size="sm"
-                            className="p-0 text-decoration-none"
-                            title={t("showFileHint")}
-                            onClick={() => onFileClick(item.file_id)}
-                          >
-                            {item.file_title}
-                          </Button>
-                        </td>
-                        <td>
-                          <StatusBadge kind="level" value={item.level} />
-                        </td>
-                        <td>{item.message}</td>
-                        <td>{formatDate(item.created_at)}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </Table>
-            </div>
-            <TablePagination {...pagination} />
-          </>
-        )}
+                        {item.file_title}
+                      </Button>
+                    </td>
+                    <td>
+                      <StatusBadge kind="level" value={item.level} />
+                    </td>
+                    <td>{item.message}</td>
+                    <td>{formatDate(item.created_at)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </Table>
+        </div>
+        <TablePagination {...pagination} />
       </Card.Body>
     </Card>
   );
