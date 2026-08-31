@@ -10,7 +10,7 @@ from src.alerts.enums import AlertLevel
 from src.alerts.models import Alert
 from src.core import db
 from src.core.config import settings
-from src.files import service as files_service
+from src.files import repository, service as files_service
 from src.files.enums import ProcessingStatus, ScanStatus
 from src.files.models import StoredFile
 from src.worker import tasks
@@ -57,32 +57,32 @@ def seed_file(storage_dir) -> str:
     return file_id
 
 
-def test_worker_pipeline_survives_fresh_loop_per_task(worker_db, storage_dir, monkeypatch):
-    """Регрессия B3: задачи выполняются в независимых event loop'ах и не должны
-    падать из-за соединений, привязанных к уже закрытому loop."""
-    file_id = seed_file(storage_dir)
-
-    delayed: list[str] = []
-    monkeypatch.setattr(tasks.extract_file_metadata, "delay", lambda fid: delayed.append(f"extract:{fid}"))
-    monkeypatch.setattr(tasks.send_file_alert, "delay", lambda fid: delayed.append(f"alert:{fid}"))
-
-    # три вызова = три event loop'а, как у последовательных задач в одном процессе воркера
-    tasks.scan_file_for_threats(file_id)
-    tasks.extract_file_metadata(file_id)
-    tasks.send_file_alert(file_id)
-
-    assert delayed == [f"extract:{file_id}", f"alert:{file_id}"]
-
-    async def load_result():
+def load_file_and_alerts(file_id: str) -> tuple[StoredFile | None, list[Alert]]:
+    async def load():
         async with db.worker_session() as session:
             file_item = await session.get(StoredFile, file_id)
             alerts = (await session.execute(select(Alert).where(Alert.file_id == file_id))).scalars().all()
-            return file_item, alerts
+            return file_item, list(alerts)
 
-    file_item, alerts = asyncio.run(load_result())
-    assert file_item.processing_status == ProcessingStatus.PROCESSED
-    assert file_item.metadata_json["line_count"] == 2
-    assert len(alerts) == 1
+    return asyncio.run(load())
+
+
+def test_worker_pipeline_survives_fresh_loop_per_task(worker_db, storage_dir):
+    """Регрессия B3: задачи выполняются в независимых event loop'ах и не должны
+    падать из-за соединений, привязанных к уже закрытому loop."""
+    first_id = seed_file(storage_dir)
+    second_id = seed_file(storage_dir)
+
+    # два вызова = два event loop'а, как у последовательных задач в одном процессе воркера
+    tasks.process_file(first_id)
+    tasks.process_file(second_id)
+
+    for file_id in (first_id, second_id):
+        file_item, alerts = load_file_and_alerts(file_id)
+        assert file_item.processing_status == ProcessingStatus.PROCESSED
+        assert file_item.metadata_json["line_count"] == 2
+        assert len(alerts) == 1
+        assert alerts[0].level == AlertLevel.INFO
 
 
 def test_worker_session_uses_fresh_disposable_engine(worker_db, monkeypatch):
@@ -118,19 +118,41 @@ def test_worker_session_uses_fresh_disposable_engine(worker_db, monkeypatch):
         assert isinstance(engine.sync_engine.pool, NullPool)
 
 
-def load_file_and_alerts(file_id: str) -> tuple[StoredFile | None, list[Alert]]:
-    async def load():
-        async with db.worker_session() as session:
-            file_item = await session.get(StoredFile, file_id)
-            alerts = (await session.execute(select(Alert).where(Alert.file_id == file_id))).scalars().all()
-            return file_item, list(alerts)
+def test_pipeline_runs_in_one_engine_session_and_fetch(worker_db, storage_dir, monkeypatch):
+    """Шаг 4: весь конвейер — одна задача с одним engine/сессией и одной выборкой
+    записи вместо трёх задач с тремя engine/сессиями/фетчами."""
+    file_id = seed_file(storage_dir)
 
-    return asyncio.run(load())
+    created_engines: list[AsyncEngine] = []
+    real_create_async_engine = db.create_async_engine
+
+    def spying_create_async_engine(*args, **kwargs):
+        engine = real_create_async_engine(*args, **kwargs)
+        created_engines.append(engine)
+        return engine
+
+    fetched: list[str] = []
+    real_get = repository.get
+
+    async def counting_get(session, fid):
+        fetched.append(fid)
+        return await real_get(session, fid)
+
+    monkeypatch.setattr(db, "create_async_engine", spying_create_async_engine)
+    monkeypatch.setattr(files_service.repository, "get", counting_get)
+
+    tasks.process_file(file_id)
+
+    assert len(created_engines) == 1, "конвейер должен обходиться одним engine"
+    assert fetched == [file_id], "запись должна выбираться из БД один раз"
+    file_item, alerts = load_file_and_alerts(file_id)
+    assert file_item.processing_status == ProcessingStatus.PROCESSED
+    assert len(alerts) == 1
 
 
 def test_processing_status_committed_before_scan_result(worker_db, storage_dir, monkeypatch):
     """Регрессия B8: статус processing коммитится отдельной транзакцией до результата
-    скана, поэтому виден другим соединениям, пока скан ещё идёт."""
+    обработки, поэтому виден другим соединениям, пока обработка ещё идёт."""
     file_id = seed_file(storage_dir)
 
     committed: list[tuple[str | None, str | None]] = []
@@ -148,24 +170,23 @@ def test_processing_status_committed_before_scan_result(worker_db, storage_dir, 
 
     monkeypatch.setattr(AsyncSession, "commit", commit_and_read_from_outside)
 
-    async def run_scan():
+    async def run_pipeline():
         async with db.worker_session() as session:
-            await files_service.scan_file_for_threats(session, file_id)
+            await files_service.process_file(session, file_id)
 
-    asyncio.run(run_scan())
+    asyncio.run(run_pipeline())
 
     assert committed == [
         (ProcessingStatus.PROCESSING, None),
-        (ProcessingStatus.PROCESSING, ScanStatus.CLEAN),
+        (ProcessingStatus.PROCESSED, ScanStatus.CLEAN),
     ]
 
 
-def test_pipeline_tasks_have_retry_config():
-    """B9: у всех задач конвейера настроены авторетраи с ограничением попыток."""
-    for task in (tasks.scan_file_for_threats, tasks.extract_file_metadata, tasks.send_file_alert):
-        assert task.autoretry_for == (Exception,)
-        assert task.max_retries == 3
-        assert task.retry_backoff is True
+def test_pipeline_task_has_retry_config():
+    """B9: у задачи конвейера настроены авторетраи с ограничением попыток."""
+    assert tasks.process_file.autoretry_for == (Exception,)
+    assert tasks.process_file.max_retries == 3
+    assert tasks.process_file.retry_backoff is True
 
 
 def test_final_failure_marks_file_failed_and_creates_critical_alert(worker_db, storage_dir):
@@ -173,7 +194,7 @@ def test_final_failure_marks_file_failed_and_creates_critical_alert(worker_db, s
     critical-алерт — файл не остаётся навсегда в processing."""
     file_id = seed_file(storage_dir)
 
-    tasks.extract_file_metadata.on_failure(RuntimeError("boom"), "task-id", (file_id,), {}, None)
+    tasks.process_file.on_failure(RuntimeError("boom"), "task-id", (file_id,), {}, None)
 
     file_item, alerts = load_file_and_alerts(file_id)
     assert file_item.processing_status == ProcessingStatus.FAILED
@@ -188,7 +209,7 @@ def test_final_failure_for_missing_file_is_noop(worker_db):
     """on_failure не падает и ничего не создаёт, если файл уже удалён."""
     missing_id = str(uuid4())
 
-    tasks.scan_file_for_threats.on_failure(RuntimeError("boom"), "task-id", (missing_id,), {}, None)
+    tasks.process_file.on_failure(RuntimeError("boom"), "task-id", (missing_id,), {}, None)
 
     file_item, alerts = load_file_and_alerts(missing_id)
     assert file_item is None

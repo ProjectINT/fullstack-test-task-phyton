@@ -98,13 +98,14 @@ async def test_upload_empty_file_returns_400_and_leaves_nothing(client, storage_
 
 
 async def test_text_metadata_counted_across_chunk_boundaries(session, storage_dir, monkeypatch):
-    """Регрессия B4/B5: метаданные считаются потоково; multibyte-символ,
-    разрезанный границей чанка, не должен ломать подсчёт."""
+    """Регрессия B4/B5: метаданные считаются потоково (fallback для записей без
+    посчитанных при загрузке метаданных); multibyte-символ, разрезанный границей
+    чанка, не должен ломать подсчёт."""
     monkeypatch.setattr(storage, "CHUNK_SIZE", 3)
     text = "héllo\nwörld"  # é и ö занимают 2 байта и попадают на границы чанков
     file_id = await seed_stored_file(session, storage_dir, text.encode(), "text/plain", ".txt")
 
-    assert await service.extract_file_metadata(session, file_id)
+    await service.process_file(session, file_id)
 
     file_item = await repository.get(session, file_id)
     assert file_item.metadata_json["line_count"] == len(text.splitlines()) == 2
@@ -118,7 +119,43 @@ async def test_pdf_page_count_across_chunk_boundaries(session, storage_dir, monk
     content = b"%PDF-1.4 " + b"/Type /Page ...obj... " * 3 + b"trailer"
     file_id = await seed_stored_file(session, storage_dir, content, "application/pdf", ".pdf")
 
-    assert await service.extract_file_metadata(session, file_id)
+    await service.process_file(session, file_id)
 
     file_item = await repository.get(session, file_id)
     assert file_item.metadata_json["approx_page_count"] == 3
+
+
+async def test_upload_computes_metadata_in_the_same_streaming_pass(session, storage_dir, monkeypatch):
+    """Шаг 4: метаданные контента считаются в том же потоковом проходе, что и запись
+    на диск, — включая multibyte-символы на границах чанков."""
+    monkeypatch.setattr(storage, "CHUNK_SIZE", 3)
+    text = "héllo\nwörld"
+    upload = ChunkRecordingUpload("sample.txt", text.encode())
+
+    file_item = await service.create_file(session, title="sample", upload_file=upload)
+
+    assert file_item.metadata_json == {
+        "extension": ".txt",
+        "size_bytes": len(text.encode()),
+        "mime_type": "text/plain",
+        "line_count": 2,
+        "char_count": 11,
+    }
+
+
+async def test_worker_does_not_reread_file_when_metadata_precomputed(session, storage_dir, monkeypatch):
+    """Шаг 4: если метаданные посчитаны при загрузке, воркер не перечитывает файл."""
+    content = b"%PDF-1.4 /Type /Page one /Type /Page two"
+    upload = ChunkRecordingUpload("sample.pdf", content, "application/pdf")
+    file_item = await service.create_file(session, title="sample", upload_file=upload)
+    assert file_item.metadata_json["approx_page_count"] == 2
+
+    def forbid_reread(stored_name):
+        raise AssertionError("worker must not re-read the stored file")
+
+    monkeypatch.setattr(storage, "iter_chunks", forbid_reread)
+    await service.process_file(session, file_item.id)
+
+    file_item = await repository.get(session, file_item.id)
+    assert file_item.processing_status == ProcessingStatus.PROCESSED
+    assert file_item.metadata_json["approx_page_count"] == 2

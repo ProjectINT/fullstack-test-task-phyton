@@ -8,7 +8,7 @@ from src.core.db import get_session
 from src.core.pagination import PaginationDep
 from src.files import service
 from src.files.schemas import FileItem, FileUpdate
-from src.worker.tasks import scan_file_for_threats
+from src.worker.tasks import process_file
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -27,7 +27,7 @@ async def create_file_view(
     file: UploadFile = File(...),
 ):
     file_item = await service.create_file(session, title=title, upload_file=file)
-    scan_file_for_threats.delay(file_item.id)
+    process_file.delay(file_item.id)
     return file_item
 
 

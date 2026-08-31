@@ -9,6 +9,9 @@ from src.files.enums import ProcessingStatus, ScanStatus
 
 class StoredFile(Base):
     __tablename__ = "files"
+    # server_default/onupdate-поля (created_at, updated_at) приходят через RETURNING
+    # при INSERT/UPDATE — session.refresh после коммита не нужен
+    __mapper_args__ = {"eager_defaults": True}
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)

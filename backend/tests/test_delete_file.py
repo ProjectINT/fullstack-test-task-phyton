@@ -21,9 +21,7 @@ async def test_delete_file_with_alerts_cascades(client, session, storage_dir):
     file_id = uploaded["id"]
 
     # прогоняем пайплайн воркера, чтобы у файла появился алерт
-    assert await service.scan_file_for_threats(session, file_id)
-    assert await service.extract_file_metadata(session, file_id)
-    await service.send_file_alert(session, file_id)
+    await service.process_file(session, file_id)
 
     alerts = (await session.execute(select(Alert).where(Alert.file_id == file_id))).scalars().all()
     assert alerts, "pipeline must have created an alert"

@@ -50,7 +50,7 @@ def storage_dir(tmp_path, monkeypatch):
 @pytest.fixture
 async def client(session_maker, storage_dir, monkeypatch) -> AsyncIterator[AsyncClient]:
     monkeypatch.setattr(
-        "src.files.router.scan_file_for_threats",
+        "src.files.router.process_file",
         SimpleNamespace(delay=lambda *args, **kwargs: None),
     )
 

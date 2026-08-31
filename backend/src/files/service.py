@@ -38,12 +38,77 @@ async def get_file_for_download(session: AsyncSession, file_id: str) -> tuple[St
     return file_item, stored_path
 
 
-async def _read_upload_chunks(upload_file: UploadFile) -> AsyncIterator[bytes]:
+class _TextStatsAnalyzer:
+    """Число строк и символов; multibyte-символы на границе чанков дособирает
+    инкрементальный декодер."""
+
+    def __init__(self) -> None:
+        self._decoder = codecs.getincrementaldecoder("utf-8")(errors="ignore")
+        self._line_count = 0
+        self._char_count = 0
+        self._ends_with_newline = True
+
+    def _consume(self, text: str) -> None:
+        if text:
+            self._line_count += text.count("\n")
+            self._char_count += len(text)
+            self._ends_with_newline = text.endswith("\n")
+
+    def feed(self, chunk: bytes) -> None:
+        self._consume(self._decoder.decode(chunk))
+
+    def finalize(self) -> dict:
+        self._consume(self._decoder.decode(b"", final=True))
+        line_count = self._line_count
+        if self._char_count and not self._ends_with_newline:
+            line_count += 1
+        return {"line_count": line_count, "char_count": self._char_count}
+
+
+class _PdfPageAnalyzer:
+    """Считает вхождения маркера страницы, не теряя те, что попали на границу чанков."""
+
+    def __init__(self) -> None:
+        self._count = 0
+        self._tail = b""
+
+    def feed(self, chunk: bytes) -> None:
+        window = self._tail + chunk
+        self._count += window.count(PDF_PAGE_MARKER)
+        self._tail = window[1 - len(PDF_PAGE_MARKER):]
+
+    def finalize(self) -> dict:
+        return {"approx_page_count": max(self._count, 1)}
+
+
+ContentAnalyzer = _TextStatsAnalyzer | _PdfPageAnalyzer
+
+
+def _content_analyzer_for(mime_type: str) -> ContentAnalyzer | None:
+    if mime_type.startswith("text/"):
+        return _TextStatsAnalyzer()
+    if mime_type == "application/pdf":
+        return _PdfPageAnalyzer()
+    return None
+
+
+def _build_metadata(file_item: StoredFile, content_stats: dict) -> dict:
+    return {
+        "extension": Path(file_item.original_name).suffix.lower(),
+        "size_bytes": file_item.size,
+        "mime_type": file_item.mime_type,
+        **content_stats,
+    }
+
+
+async def _read_upload_chunks(upload_file: UploadFile, analyzer: ContentAnalyzer | None) -> AsyncIterator[bytes]:
     total = 0
     while chunk := await upload_file.read(storage.CHUNK_SIZE):
         total += len(chunk)
         if total > settings.max_file_size:
             raise FileTooLarge
+        if analyzer:
+            analyzer.feed(chunk)
         yield chunk
 
 
@@ -51,9 +116,13 @@ async def create_file(session: AsyncSession, title: str, upload_file: UploadFile
     file_id = str(uuid4())
     suffix = Path(upload_file.filename or "").suffix
     stored_name = f"{file_id}{suffix}"
+    mime_type = upload_file.content_type or mimetypes.guess_type(stored_name)[0] or "application/octet-stream"
 
+    # Метаданные контента считаются в том же потоковом проходе, что и запись на диск, —
+    # воркеру не приходится перечитывать файл.
+    analyzer = _content_analyzer_for(mime_type)
     try:
-        size = await storage.save(stored_name, _read_upload_chunks(upload_file))
+        size = await storage.save(stored_name, _read_upload_chunks(upload_file, analyzer))
     except FileTooLarge:
         await storage.delete(stored_name)
         raise
@@ -66,13 +135,13 @@ async def create_file(session: AsyncSession, title: str, upload_file: UploadFile
         title=title,
         original_name=upload_file.filename or stored_name,
         stored_name=stored_name,
-        mime_type=upload_file.content_type or mimetypes.guess_type(stored_name)[0] or "application/octet-stream",
+        mime_type=mime_type,
         size=size,
         processing_status=ProcessingStatus.UPLOADED,
     )
+    file_item.metadata_json = _build_metadata(file_item, analyzer.finalize() if analyzer else {})
     repository.add(session, file_item)
     await session.commit()
-    await session.refresh(file_item)
     return file_item
 
 
@@ -80,7 +149,6 @@ async def update_file(session: AsyncSession, file_id: str, title: str) -> Stored
     file_item = await get_file(session, file_id)
     file_item.title = title
     await session.commit()
-    await session.refresh(file_item)
     return file_item
 
 
@@ -92,16 +160,7 @@ async def delete_file(session: AsyncSession, file_id: str) -> None:
     await storage.delete(stored_name)
 
 
-async def scan_file_for_threats(session: AsyncSession, file_id: str) -> bool:
-    """Returns False when the file no longer exists and the pipeline must stop."""
-    file_item = await repository.get(session, file_id)
-    if not file_item:
-        return False
-
-    # B8: промежуточный статус коммитим отдельно, чтобы он был виден до окончания скана
-    file_item.processing_status = ProcessingStatus.PROCESSING
-    await session.commit()
-
+def _scan_for_threats(file_item: StoredFile) -> None:
     reasons: list[str] = []
     extension = Path(file_item.original_name).suffix.lower()
 
@@ -117,76 +176,57 @@ async def scan_file_for_threats(session: AsyncSession, file_id: str) -> bool:
     file_item.scan_status = ScanStatus.SUSPICIOUS if reasons else ScanStatus.CLEAN
     file_item.scan_details = ", ".join(reasons) if reasons else "no threats found"
     file_item.requires_attention = bool(reasons)
-    await session.commit()
-    return True
 
 
-async def _count_text_stats(stored_name: str) -> tuple[int, int]:
-    """Число строк и символов одним потоковым проходом; multibyte-символы на границе
-    чанков дособирает инкрементальный декодер."""
-    decoder = codecs.getincrementaldecoder("utf-8")(errors="ignore")
-    line_count = 0
-    char_count = 0
-    ends_with_newline = True
+async def _ensure_metadata(file_item: StoredFile) -> None:
+    """Обычно метаданные уже посчитаны при загрузке; для записей без них
+    (загруженных до этой оптимизации) — один потоковый проход по файлу."""
+    if file_item.metadata_json is not None:
+        return
 
-    async for chunk in storage.iter_chunks(stored_name):
-        text = decoder.decode(chunk)
-        if text:
-            line_count += text.count("\n")
-            char_count += len(text)
-            ends_with_newline = text.endswith("\n")
-    text = decoder.decode(b"", final=True)
-    if text:
-        line_count += text.count("\n")
-        char_count += len(text)
-        ends_with_newline = text.endswith("\n")
-
-    if char_count and not ends_with_newline:
-        line_count += 1
-    return line_count, char_count
+    analyzer = _content_analyzer_for(file_item.mime_type)
+    content_stats: dict = {}
+    if analyzer:
+        async for chunk in storage.iter_chunks(file_item.stored_name):
+            analyzer.feed(chunk)
+        content_stats = analyzer.finalize()
+    file_item.metadata_json = _build_metadata(file_item, content_stats)
 
 
-async def _count_pdf_pages(stored_name: str) -> int:
-    """Считает вхождения маркера страницы, не теряя те, что попали на границу чанков."""
-    count = 0
-    tail = b""
-    async for chunk in storage.iter_chunks(stored_name):
-        window = tail + chunk
-        count += window.count(PDF_PAGE_MARKER)
-        tail = window[1 - len(PDF_PAGE_MARKER):]
-    return count
+def _build_alert(file_item: StoredFile) -> Alert:
+    if file_item.requires_attention:
+        return Alert(
+            file_id=file_item.id,
+            level=AlertLevel.WARNING,
+            message=f"File requires attention: {file_item.scan_details}",
+        )
+    return Alert(file_id=file_item.id, level=AlertLevel.INFO, message="File processed successfully")
 
 
-async def extract_file_metadata(session: AsyncSession, file_id: str) -> bool:
-    """Returns False when the file no longer exists and the pipeline must stop."""
+async def process_file(session: AsyncSession, file_id: str) -> None:
+    """Весь конвейер (скан → метаданные → алерт) одним проходом: одна сессия
+    и одна выборка записи вместо трёх задач с тремя engine/сессиями/фетчами."""
     file_item = await repository.get(session, file_id)
     if not file_item:
-        return False
+        return
+
+    # B8: промежуточный статус коммитим отдельно, чтобы он был виден до окончания обработки
+    file_item.processing_status = ProcessingStatus.PROCESSING
+    await session.commit()
 
     if not await storage.exists(file_item.stored_name):
         file_item.processing_status = ProcessingStatus.FAILED
         file_item.scan_status = file_item.scan_status or ScanStatus.FAILED
-        file_item.scan_details = "stored file not found during metadata extraction"
+        file_item.scan_details = "stored file not found during processing"
         await session.commit()
-        return True
+        return
 
-    metadata = {
-        "extension": Path(file_item.original_name).suffix.lower(),
-        "size_bytes": file_item.size,
-        "mime_type": file_item.mime_type,
-    }
-
-    if file_item.mime_type.startswith("text/"):
-        line_count, char_count = await _count_text_stats(file_item.stored_name)
-        metadata["line_count"] = line_count
-        metadata["char_count"] = char_count
-    elif file_item.mime_type == "application/pdf":
-        metadata["approx_page_count"] = max(await _count_pdf_pages(file_item.stored_name), 1)
-
-    file_item.metadata_json = metadata
+    _scan_for_threats(file_item)
+    await _ensure_metadata(file_item)
     file_item.processing_status = ProcessingStatus.PROCESSED
+    alerts_repository.add(session, _build_alert(file_item))
+    # результат скана, метаданные и алерт — одной транзакцией
     await session.commit()
-    return True
 
 
 async def mark_file_failed(session: AsyncSession, file_id: str, reason: str) -> None:
@@ -199,25 +239,5 @@ async def mark_file_failed(session: AsyncSession, file_id: str, reason: str) -> 
         file_item.scan_status = ScanStatus.FAILED
     file_item.scan_details = reason[:500]
     alert = Alert(file_id=file_id, level=AlertLevel.CRITICAL, message=f"File processing failed: {reason}"[:500])
-    alerts_repository.add(session, alert)
-    await session.commit()
-
-
-async def send_file_alert(session: AsyncSession, file_id: str) -> None:
-    file_item = await repository.get(session, file_id)
-    if not file_item:
-        return
-
-    if file_item.processing_status == ProcessingStatus.FAILED:
-        alert = Alert(file_id=file_id, level=AlertLevel.CRITICAL, message="File processing failed")
-    elif file_item.requires_attention:
-        alert = Alert(
-            file_id=file_id,
-            level=AlertLevel.WARNING,
-            message=f"File requires attention: {file_item.scan_details}",
-        )
-    else:
-        alert = Alert(file_id=file_id, level=AlertLevel.INFO, message="File processed successfully")
-
     alerts_repository.add(session, alert)
     await session.commit()
