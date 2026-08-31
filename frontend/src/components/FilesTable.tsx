@@ -85,7 +85,6 @@ export function FilesTable({
                       >
                         <td>
                           <div className="fw-semibold">{file.title}</div>
-                          <div className="small text-secondary">{file.id}</div>
                         </td>
                         <td>{file.original_name}</td>
                         <td>{file.mime_type}</td>
@@ -94,12 +93,10 @@ export function FilesTable({
                           <ProcessingStatusBadge status={file.processing_status} />
                         </td>
                         <td>
-                          <div className="d-flex flex-column gap-1">
-                            <ScanStatusBadge status={file.scan_status} />
-                            <span className="small text-secondary">
-                              {file.scan_details ?? "Ожидает обработки"}
-                            </span>
-                          </div>
+                          <ScanStatusBadge
+                            status={file.scan_status}
+                            details={file.scan_details}
+                          />
                         </td>
                         <td>{formatDate(file.created_at)}</td>
                         <td className="text-nowrap">

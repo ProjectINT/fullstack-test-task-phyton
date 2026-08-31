@@ -26,9 +26,18 @@ export function ProcessingStatusBadge({ status }: { status: ProcessingStatus }) 
   return <Badge bg={processingVariants[status] ?? "secondary"}>{status}</Badge>;
 }
 
-export function ScanStatusBadge({ status }: { status: ScanStatus | null }) {
+export function ScanStatusBadge({
+  status,
+  details,
+}: {
+  status: ScanStatus | null;
+  details?: string | null;
+}) {
   return (
-    <Badge bg={status ? scanVariants[status] ?? "secondary" : "secondary"}>
+    <Badge
+      bg={status ? scanVariants[status] ?? "secondary" : "secondary"}
+      title={details ?? undefined}
+    >
       {status ?? "pending"}
     </Badge>
   );
