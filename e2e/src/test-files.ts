@@ -27,6 +27,8 @@ type FixtureSpec = {
   mimeType: string;
   /** Контент; функция — чтобы 11 МБ не висели в памяти без нужды. */
   build: () => Buffer;
+  /** Не материализовать в globalSetup: слишком тяжёлый, нужен паре тестов. */
+  lazy?: boolean;
 };
 
 const SPECS = {
@@ -61,6 +63,13 @@ const SPECS = {
     mimeType: "application/octet-stream",
     // > SUSPICIOUS_SIZE_BYTES (10 МБ), но < max_file_size (100 МБ).
     build: () => Buffer.alloc(11 * MB, 0x41),
+  },
+  huge: {
+    name: "huge-101mb.bin",
+    mimeType: "application/octet-stream",
+    // > max_file_size (100 МБ) — бэкенд обрывает загрузку с 413.
+    build: () => Buffer.alloc(101 * MB, 0x41),
+    lazy: true,
   },
   bigExe: {
     name: "big-malware.exe",
@@ -106,12 +115,13 @@ const materialize = (key: TestFileKey, spec: FixtureSpec): TestFile => {
   };
 };
 
-/** Создаёт все фикстуры на диске. Вызывается из globalSetup. */
-export const ensureTestFiles = (): Record<TestFileKey, TestFile> => {
+/** Создаёт фикстуры на диске (кроме `lazy`). Вызывается из globalSetup. */
+export const ensureTestFiles = (): Partial<Record<TestFileKey, TestFile>> => {
   fs.mkdirSync(FIXTURES_DIR, { recursive: true });
 
-  const result = {} as Record<TestFileKey, TestFile>;
+  const result: Partial<Record<TestFileKey, TestFile>> = {};
   for (const [key, spec] of Object.entries(SPECS) as [TestFileKey, FixtureSpec][]) {
+    if (spec.lazy) continue;
     result[key] = materialize(key, spec);
   }
   return result;

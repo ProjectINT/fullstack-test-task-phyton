@@ -47,7 +47,8 @@ const waitFor = async (check: Check, deadline: number): Promise<void> => {
 
 const globalSetup = async (): Promise<void> => {
   const files = ensureTestFiles();
-  console.log(`[globalSetup] фикстуры: ${Object.values(files).map((f) => f.name).join(", ")}`);
+  const names = Object.values(files).flatMap((file) => (file ? [file.name] : []));
+  console.log(`[globalSetup] фикстуры: ${names.join(", ")}`);
 
   const deadline = Date.now() + STACK_READY_TIMEOUT_MS;
   // Последовательно, чтобы в логе было видно, что именно не поднялось.

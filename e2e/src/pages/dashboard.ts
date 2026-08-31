@@ -1,4 +1,4 @@
-import { Locator, Page, expect } from "@playwright/test";
+import { Locator, Page, Route, expect } from "@playwright/test";
 
 import { API_URL, APP_PATH, PROCESSING_TIMEOUT_MS } from "../config";
 
@@ -262,12 +262,48 @@ export class DashboardPage {
 
   /** Задерживает ответы списков — чтобы поймать спиннер обновления. */
   async delayLists(delayMs: number): Promise<void> {
+    await this.routeApi(["/files", "/alerts"], "GET", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      await route.fallback();
+    });
+  }
+
+  /**
+   * Эмулирует недоступный бэкенд для клиентских запросов списков:
+   * без `status` — обрыв соединения (ApiError kind=network), со `status` —
+   * HTTP-ошибка без `detail` (ApiError kind=http).
+   */
+  async failLists({ status }: { status?: number } = {}): Promise<void> {
+    await this.routeApi(["/files", "/alerts"], "GET", async (route) => {
+      if (status === undefined) return route.abort("failed");
+      await route.fulfill({ status, json: {} });
+    });
+  }
+
+  /** То же для загрузки файла: POST /files не доходит до бэкенда. */
+  async failUpload(): Promise<void> {
+    await this.routeApi(["/files"], "POST", (route) => route.abort("failed"));
+  }
+
+  /** Задерживает загрузку — чтобы поймать «Загрузка...» на кнопке сабмита. */
+  async delayUpload(delayMs: number): Promise<void> {
+    await this.routeApi(["/files"], "POST", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      await route.fallback();
+    });
+  }
+
+  /** Перехват запросов браузера к бэкенду; чужие методы уходят дальше по цепочке. */
+  private async routeApi(
+    pathnames: string[],
+    method: string,
+    handler: (route: Route) => Promise<unknown> | unknown,
+  ): Promise<void> {
     await this.page.route(
-      (url) => url.origin === API_URL && ["/files", "/alerts"].includes(url.pathname),
+      (url) => url.origin === API_URL && pathnames.includes(url.pathname),
       async (route) => {
-        if (route.request().method() !== "GET") return route.fallback();
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
-        await route.fallback();
+        if (route.request().method() !== method) return route.fallback();
+        await handler(route);
       },
     );
   }

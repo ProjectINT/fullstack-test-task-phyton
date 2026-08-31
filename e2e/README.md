@@ -49,9 +49,11 @@ e2e/
 │   └── pages/
 │       └── dashboard.ts   # page object главной страницы (секции, строки, модалка загрузки)
 └── tests/
-    ├── smoke.spec.ts      # фаза 0: инфраструктура жива
-    ├── smoke-ui.spec.ts   # фаза 1: smoke UI
-    └── upload.spec.ts     # фаза 2: загрузка файла (happy path)
+    ├── smoke.spec.ts       # фаза 0: инфраструктура жива
+    ├── smoke-ui.spec.ts    # фаза 1: smoke UI
+    ├── upload.spec.ts      # фаза 2: загрузка файла (happy path)
+    ├── scan.spec.ts        # фаза 3: сценарии скана (подозрительные файлы)
+    └── negative-ui.spec.ts # фаза 4: негативные сценарии UI
 ```
 
 ## Фикстуры Playwright
@@ -63,7 +65,8 @@ e2e/
 - `appPage` — открытая страница приложения (сырой `Page`).
 - `dashboard` — та же страница как page object `DashboardPage`: секции
   `files`/`alerts` со счётчиком, спиннером и таблицей, плюс `refresh()`,
-  `mockLists()` и `delayLists()` для перехвата клиентских запросов.
+  `mockLists()`, `delayLists()`, `failLists()`, `failUpload()` и `delayUpload()`
+  для перехвата клиентских запросов.
   Для загрузки через UI: `openUploadModal()` / `uploadViaUi()`, доступ к строкам —
   `fileRow(title)` и `alertRow(fileTitle)`, ожидание воркера через «Обновить» —
   `refreshUntilStatus(row, 'processed')`.
@@ -82,7 +85,8 @@ e2e/
 ## Фикстуры-файлы
 
 Генерируются в `e2e/.tmp/fixtures/` (gitignored) идемпотентно — 11 МБ не
-переписываются на каждом прогоне.
+переписываются на каждом прогоне. Помеченные `lazy` (101 МБ) globalSetup
+пропускает: они появляются на диске при первом `testFile('huge')`.
 
 | Ключ | Файл | Что проверяет |
 |---|---|---|
@@ -92,4 +96,5 @@ e2e/
 | `js` | `script.js` | подозрительное расширение `.js` |
 | `empty` | `empty.txt` | 0 байт → 400 |
 | `big` | `big-11mb.bin` | > 10 МБ → `suspicious` |
+| `huge` | `huge-101mb.bin` | > 100 МБ → 413 (создаётся только по требованию) |
 | `bigExe` | `big-malware.exe` | две причины в `scan_details` |
