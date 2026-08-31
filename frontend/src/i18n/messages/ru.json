@@ -1,0 +1,103 @@
+{
+  "metadata": {
+    "title": "Тестовое задание Fullstack",
+    "description": "Тестовое задание Fullstack"
+  },
+  "common": {
+    "cancel": "Отмена",
+    "save": "Сохранить"
+  },
+  "page": {
+    "title": "Управление файлами",
+    "subtitle": "Загрузка файлов, просмотр статусов обработки и ленты алертов.",
+    "refresh": "Обновить",
+    "addFile": "Добавить файл"
+  },
+  "filesTable": {
+    "title": "Файлы",
+    "empty": "Файлы пока не загружены",
+    "columns": {
+      "title": "Название",
+      "file": "Файл",
+      "mime": "MIME",
+      "size": "Размер",
+      "status": "Статус",
+      "scan": "Проверка",
+      "createdAt": "Создан"
+    },
+    "download": "Скачать",
+    "rename": "Переименовать",
+    "delete": "Удалить"
+  },
+  "alertsTable": {
+    "title": "Алерты",
+    "empty": "Алертов пока нет",
+    "columns": {
+      "file": "Файл",
+      "level": "Уровень",
+      "message": "Сообщение",
+      "createdAt": "Создан"
+    },
+    "showFileHint": "Показать файл в таблице файлов"
+  },
+  "pagination": {
+    "prev": "← Назад",
+    "next": "Вперёд →",
+    "page": "Страница {page}"
+  },
+  "uploadModal": {
+    "title": "Добавить файл",
+    "titleLabel": "Название",
+    "titlePlaceholder": "Например, Договор с подрядчиком",
+    "fileLabel": "Файл",
+    "validation": "Укажите название и выберите файл",
+    "submitting": "Загрузка..."
+  },
+  "renameModal": {
+    "title": "Переименовать файл",
+    "titleLabel": "Название",
+    "validation": "Укажите название",
+    "submitting": "Сохранение..."
+  },
+  "deleteModal": {
+    "title": "Удалить файл",
+    "confirmation": "Удалить файл «{title}»? Действие необратимо.",
+    "confirm": "Удалить",
+    "submitting": "Удаление..."
+  },
+  "statuses": {
+    "processing": {
+      "uploaded": "uploaded",
+      "processing": "processing",
+      "processed": "processed",
+      "failed": "failed"
+    },
+    "scan": {
+      "clean": "clean",
+      "suspicious": "suspicious",
+      "failed": "failed",
+      "pending": "pending"
+    },
+    "level": {
+      "info": "info",
+      "warning": "warning",
+      "critical": "critical"
+    }
+  },
+  "format": {
+    "bytes": "{value} B",
+    "kilobytes": "{value} KB",
+    "megabytes": "{value} MB"
+  },
+  "errorPage": {
+    "title": "Не удалось загрузить данные",
+    "description": "Сервер недоступен или вернул ошибку. Попробуйте ещё раз.",
+    "retry": "Повторить"
+  },
+  "errors": {
+    "network": "Сервер недоступен. Проверьте соединение.",
+    "timeout": "Сервер не ответил вовремя. Попробуйте ещё раз.",
+    "http": "Не удалось выполнить запрос ({status})",
+    "unknown": "Произошла ошибка"
+  }
+}

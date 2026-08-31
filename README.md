@@ -15,6 +15,6 @@
 2. ```docker exec -it backend alembic upgrade head```
 
 
-**Открыть фронт:** ```http://localhost:3000/test``` 
+**Открыть фронт:** ```http://localhost:3000``` 
 
 **Открыть бэк:** ```http://localhost:8000/docs```

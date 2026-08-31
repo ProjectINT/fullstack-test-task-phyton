@@ -38,9 +38,18 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # URL, по которому браузер пользователя ходит в API (не внутрисетевой хост)
+        NEXT_PUBLIC_API_URL: http://localhost:8000
     container_name: frontend
+    environment:
+      # URL для запросов с сервера Next (серверные компоненты):
+      # внутри docker-сети бэкенд доступен по имени сервиса, а не по localhost
+      API_URL: http://backend:8000
     ports:
       - "3000:3000"
+    depends_on:
+      - backend
 
 volumes:
   backend-db-volume:
