@@ -62,6 +62,7 @@ export class FileRow {
   /** Бейдж `scan_status`; в его `title` лежат `scan_details`. */
   readonly scan: Locator;
   readonly createdAt: Locator;
+  /** Ссылка «Скачать»: react-bootstrap рендерит `<a href>` с `role="button"`. */
   readonly downloadLink: Locator;
   readonly renameButton: Locator;
   readonly deleteButton: Locator;
@@ -75,7 +76,7 @@ export class FileRow {
     this.status = this.cells.nth(4).locator(".badge");
     this.scan = this.cells.nth(5).locator(".badge");
     this.createdAt = this.cells.nth(6);
-    this.downloadLink = root.getByRole("link", { name: "Скачать" });
+    this.downloadLink = root.getByRole("button", { name: "Скачать" });
     this.renameButton = root.getByRole("button", { name: "Переименовать" });
     this.deleteButton = root.getByRole("button", { name: "Удалить" });
   }
