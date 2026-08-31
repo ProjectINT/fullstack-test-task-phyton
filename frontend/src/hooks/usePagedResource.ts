@@ -31,11 +31,11 @@ export type PagedResource<T> = {
  * `initialData` — сырая выборка размером pageSize + 1: лишний элемент
  * означает, что есть следующая страница (тот же приём в load ниже).
  */
-export function usePagedResource<T>(
+export const usePagedResource = <T>(
   fetcher: Fetcher<T>,
   initialData: T[],
   pageSize = DEFAULT_PAGE_SIZE
-): PagedResource<T> {
+): PagedResource<T> => {
   const [items, setItems] = useState<T[]>(() => initialData.slice(0, pageSize));
   const [offset, setOffset] = useState(0);
   const [hasNext, setHasNext] = useState(initialData.length > pageSize);
@@ -122,4 +122,4 @@ export function usePagedResource<T>(
     nextPage,
     refetch,
   };
-}
+};

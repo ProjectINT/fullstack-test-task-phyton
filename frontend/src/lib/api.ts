@@ -16,7 +16,30 @@ export type PageParams = {
   signal?: AbortSignal;
 };
 
-async function request(path: string, init?: RequestInit): Promise<Response> {
+const fail = (error: ApiError): ApiError => {
+  logApiError(error);
+  return error;
+};
+
+const extractDetail = async (response: Response): Promise<string | null> => {
+  const data = (await response.json().catch(() => null)) as {
+    detail?: unknown;
+  } | null;
+  const detail = data?.detail;
+  if (typeof detail === "string") return detail;
+  // 422 от FastAPI: detail — массив ошибок валидации с полем msg.
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item: { msg?: unknown }) =>
+        typeof item?.msg === "string" ? item.msg : null
+      )
+      .filter((msg): msg is string => msg !== null);
+    if (messages.length > 0) return messages.join("; ");
+  }
+  return null;
+};
+
+const request = async (path: string, init?: RequestInit): Promise<Response> => {
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   const signal = init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
 
@@ -49,81 +72,58 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
   }
 
   return response;
-}
+};
 
-function fail(error: ApiError): ApiError {
-  logApiError(error);
-  return error;
-}
-
-async function extractDetail(response: Response): Promise<string | null> {
-  const data = (await response.json().catch(() => null)) as {
-    detail?: unknown;
-  } | null;
-  const detail = data?.detail;
-  if (typeof detail === "string") return detail;
-  // 422 от FastAPI: detail — массив ошибок валидации с полем msg.
-  if (Array.isArray(detail)) {
-    const messages = detail
-      .map((item: { msg?: unknown }) =>
-        typeof item?.msg === "string" ? item.msg : null
-      )
-      .filter((msg): msg is string => msg !== null);
-    if (messages.length > 0) return messages.join("; ");
-  }
-  return null;
-}
-
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+const apiFetch = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const response = await request(path, init);
   return response.json() as Promise<T>;
-}
+};
 
 /** Для запросов без тела ответа (DELETE → 204). */
-async function apiFetchVoid(path: string, init?: RequestInit): Promise<void> {
+const apiFetchVoid = async (path: string, init?: RequestInit): Promise<void> => {
   await request(path, init);
-}
+};
 
-function withQuery(path: string, { limit, offset }: PageParams) {
+const withQuery = (path: string, { limit, offset }: PageParams) => {
   const query = new URLSearchParams();
   if (limit !== undefined) query.set("limit", String(limit));
   if (offset !== undefined) query.set("offset", String(offset));
   const queryString = query.toString();
   return queryString ? `${path}?${queryString}` : path;
-}
+};
 
-export function getFiles(params: PageParams = {}) {
+export const getFiles = (params: PageParams = {}) => {
   return apiFetch<FileItem[]>(withQuery("/files", params), {
     signal: params.signal,
   });
-}
+};
 
-export function getAlerts(params: PageParams = {}) {
+export const getAlerts = (params: PageParams = {}) => {
   return apiFetch<AlertItem[]>(withQuery("/alerts", params), {
     signal: params.signal,
   });
-}
+};
 
-export function uploadFile(title: string, file: File) {
+export const uploadFile = (title: string, file: File) => {
   const formData = new FormData();
   formData.append("title", title);
   formData.append("file", file);
 
   return apiFetch<FileItem>("/files", { method: "POST", body: formData });
-}
+};
 
-export function renameFile(fileId: string, title: string) {
+export const renameFile = (fileId: string, title: string) => {
   return apiFetch<FileItem>(`/files/${fileId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title }),
   });
-}
+};
 
-export function deleteFile(fileId: string) {
+export const deleteFile = (fileId: string) => {
   return apiFetchVoid(`/files/${fileId}`, { method: "DELETE" });
-}
+};
 
-export function fileDownloadUrl(fileId: string) {
+export const fileDownloadUrl = (fileId: string) => {
   return `${API_URL}/files/${fileId}/download`;
-}
+};

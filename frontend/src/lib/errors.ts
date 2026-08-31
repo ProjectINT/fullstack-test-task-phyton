@@ -43,25 +43,25 @@ let logger: ApiErrorLogger = (error) => {
 };
 
 /** Подменить логгер ошибок API (например, на Sentry). */
-export function setApiErrorLogger(fn: ApiErrorLogger) {
+export const setApiErrorLogger = (fn: ApiErrorLogger) => {
   logger = fn;
-}
+};
 
-export function logApiError(error: ApiError) {
+export const logApiError = (error: ApiError) => {
   try {
     logger(error);
   } catch {
     // Сломанный логгер не должен ломать обработку ошибки.
   }
-}
+};
 
 /** Отмена запроса (AbortController) — не ошибка, её показывать не нужно. */
-export function isAbortError(error: unknown): boolean {
+export const isAbortError = (error: unknown): boolean => {
   return error instanceof DOMException && error.name === "AbortError";
-}
+};
 
 /** Единственная точка превращения ошибки в текст для пользователя. */
-export function toUserMessage(error: unknown): string {
+export const toUserMessage = (error: unknown): string => {
   if (error instanceof ApiError) {
     switch (error.kind) {
       case "network":
@@ -73,4 +73,4 @@ export function toUserMessage(error: unknown): string {
     }
   }
   return t("errors.unknown");
-}
+};

@@ -18,7 +18,7 @@ const CHECKS: Check[] = [
   },
 ];
 
-async function waitFor(check: Check, deadline: number): Promise<void> {
+const waitFor = async (check: Check, deadline: number): Promise<void> => {
   const context = await request.newContext({ ignoreHTTPSErrors: true });
   let lastError = "нет ответа";
 
@@ -43,9 +43,9 @@ async function waitFor(check: Check, deadline: number): Promise<void> {
     `[globalSetup] ${check.name} не готов: ${check.url} — ${lastError}\n` +
       `Поднимите стек: ${check.hint}`,
   );
-}
+};
 
-export default async function globalSetup(): Promise<void> {
+const globalSetup = async (): Promise<void> => {
   const files = ensureTestFiles();
   console.log(`[globalSetup] фикстуры: ${Object.values(files).map((f) => f.name).join(", ")}`);
 
@@ -55,4 +55,6 @@ export default async function globalSetup(): Promise<void> {
     await waitFor(check, deadline);
     console.log(`[globalSetup] ${check.name} готов: ${check.url}`);
   }
-}
+};
+
+export default globalSetup;

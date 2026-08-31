@@ -52,11 +52,11 @@ const TERMINAL_STATUSES: ProcessingStatus[] = ["processed", "failed"];
 /** Сколько ждём, пока запись появится в выдаче списка (поиск по title). */
 const LOOKUP_TIMEOUT_MS = 15_000;
 
-function resolvePayload(options: UploadOptions): {
+const resolvePayload = (options: UploadOptions): {
   name: string;
   mimeType: string;
   buffer: Buffer;
-} {
+} => {
   if (options.content !== undefined) {
     const name = options.fileName ?? options.file?.name;
     if (!name) {
@@ -79,7 +79,7 @@ function resolvePayload(options: UploadOptions): {
     mimeType: options.mimeType ?? options.file?.mimeType ?? "application/octet-stream",
     buffer: fs.readFileSync(filePath),
   };
-}
+};
 
 /**
  * Тонкая обёртка над FastAPI-бэком поверх `request`-контекста Playwright.

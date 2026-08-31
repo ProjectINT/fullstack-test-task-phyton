@@ -16,14 +16,14 @@ type Props = {
   onFileClick: (fileId: string) => void;
 };
 
-export function AlertsTable({
+export const AlertsTable = ({
   alerts,
   isRefreshing,
   error,
   pagination,
   highlightedFileId,
   onFileClick,
-}: Props) {
+}: Props) => {
   const t = useTranslations("alertsTable");
   return (
     <Card className="shadow-sm border-0">
@@ -89,4 +89,4 @@ export function AlertsTable({
       </Card.Body>
     </Card>
   );
-}
+};

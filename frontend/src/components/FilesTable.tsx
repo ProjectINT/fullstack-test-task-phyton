@@ -19,7 +19,7 @@ type Props = {
   onDelete: (file: FileItem) => void;
 };
 
-export function FilesTable({
+export const FilesTable = ({
   files,
   isRefreshing,
   error,
@@ -27,7 +27,7 @@ export function FilesTable({
   highlightedFileId,
   onRename,
   onDelete,
-}: Props) {
+}: Props) => {
   const t = useTranslations("filesTable");
   const highlightedRowRef = useRef<HTMLTableRowElement | null>(null);
 
@@ -130,4 +130,4 @@ export function FilesTable({
       </Card.Body>
     </Card>
   );
-}
+};

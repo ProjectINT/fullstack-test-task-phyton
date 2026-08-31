@@ -13,18 +13,18 @@ type Props = {
   onDeleted: () => void;
 };
 
-export function ConfirmDeleteModal({ file, onClose, onDeleted }: Props) {
+export const ConfirmDeleteModal = ({ file, onClose, onDeleted }: Props) => {
   const t = useTranslations("deleteModal");
   const tCommon = useTranslations("common");
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  function handleClose() {
+  const handleClose = () => {
     setError(null);
     onClose();
-  }
+  };
 
-  async function handleDelete() {
+  const handleDelete = async () => {
     if (!file) return;
 
     setIsDeleting(true);
@@ -39,7 +39,7 @@ export function ConfirmDeleteModal({ file, onClose, onDeleted }: Props) {
     } finally {
       setIsDeleting(false);
     }
-  }
+  };
 
   return (
     <Modal show={file !== null} onHide={handleClose} centered>
@@ -60,4 +60,4 @@ export function ConfirmDeleteModal({ file, onClose, onDeleted }: Props) {
       </Modal.Footer>
     </Modal>
   );
-}
+};

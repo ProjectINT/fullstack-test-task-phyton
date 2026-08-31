@@ -12,7 +12,7 @@ type Props = {
   onUploaded: () => void;
 };
 
-export function UploadModal({ show, onClose, onUploaded }: Props) {
+export const UploadModal = ({ show, onClose, onUploaded }: Props) => {
   const t = useTranslations("uploadModal");
   const tCommon = useTranslations("common");
   const [title, setTitle] = useState("");
@@ -20,14 +20,14 @@ export function UploadModal({ show, onClose, onUploaded }: Props) {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleClose() {
+  const handleClose = () => {
     setTitle("");
     setSelectedFile(null);
     setFormError(null);
     onClose();
-  }
+  };
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!title.trim() || !selectedFile) {
@@ -47,7 +47,7 @@ export function UploadModal({ show, onClose, onUploaded }: Props) {
     } finally {
       setIsSubmitting(false);
     }
-  }
+  };
 
   return (
     <Modal show={show} onHide={handleClose} centered>
@@ -86,4 +86,4 @@ export function UploadModal({ show, onClose, onUploaded }: Props) {
       </Form>
     </Modal>
   );
-}
+};

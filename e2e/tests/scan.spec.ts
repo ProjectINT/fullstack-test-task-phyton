@@ -15,7 +15,7 @@ const REASON = {
 } as const;
 
 /** Бэкенд подтвердил: файл обработан, помечен suspicious, алерт — warning. */
-async function expectSuspiciousInApi(api: Api, file: FileItem, details: string): Promise<FileItem> {
+const expectSuspiciousInApi = async (api: Api, file: FileItem, details: string): Promise<FileItem> => {
   const processed = await api.waitForProcessed(file.id);
   expect(processed.scan_status).toBe("suspicious");
   expect(processed.scan_details).toBe(details);
@@ -26,17 +26,17 @@ async function expectSuspiciousInApi(api: Api, file: FileItem, details: string):
   expect(alert.message).toBe(`File requires attention: ${details}`);
 
   return processed;
-}
+};
 
 /**
  * То же самое глазами пользователя. Вызывать после того, как API подтвердил
  * терминальный статус, — иначе одного «Обновить» может не хватить.
  */
-async function expectSuspiciousInUi(
+const expectSuspiciousInUi = async (
   dashboard: DashboardPage,
   title: string,
   details: string,
-): Promise<void> {
+): Promise<void> => {
   await dashboard.refresh();
 
   const row = dashboard.fileRow(title);
@@ -55,20 +55,20 @@ async function expectSuspiciousInUi(
   await expect(alertRow.level).toHaveText("warning");
   await expect(alertRow.level).toHaveClass(/bg-warning/);
   await expect(alertRow.message).toHaveText(`File requires attention: ${details}`);
-}
+};
 
 type ScanContext = { api: Api; dashboard: DashboardPage; uploadFile: UploadFile };
 
 /** Общий сценарий «залить фикстуру через API → проверить бэкенд и UI». */
-async function checkFixture(
+const checkFixture = async (
   { api, dashboard, uploadFile }: ScanContext,
   fixture: TestFileKey,
   details: string,
-): Promise<void> {
+): Promise<void> => {
   const created = await uploadFile({ fixture, label: fixture });
   await expectSuspiciousInApi(api, created, details);
   await expectSuspiciousInUi(dashboard, created.title, details);
-}
+};
 
 test.describe("phase 3: сценарии скана (подозрительные файлы)", () => {
   test("malware.exe, загруженный через UI, помечается suspicious", async ({

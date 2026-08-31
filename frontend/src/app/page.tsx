@@ -5,7 +5,7 @@ import { DEFAULT_PAGE_SIZE, getAlerts, getFiles } from "@/lib/api";
 // и не пререндерим её на билде, когда бэкенд недоступен.
 export const dynamic = "force-dynamic";
 
-export default async function Page() {
+const Page = async () => {
   // +1 элемент — чтобы клиент знал, есть ли следующая страница (см. usePagedResource).
   const pageParams = { limit: DEFAULT_PAGE_SIZE + 1, offset: 0 };
   const [initialFiles, initialAlerts] = await Promise.all([
@@ -15,4 +15,6 @@ export default async function Page() {
 
   // Если бэкенд недоступен, промисы выше отклонятся — покажется app/error.tsx.
   return <Dashboard initialFiles={initialFiles} initialAlerts={initialAlerts} />;
-}
+};
+
+export default Page;

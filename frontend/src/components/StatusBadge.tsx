@@ -28,11 +28,11 @@ type Props =
   | { kind: "scan"; value: ScanStatus | null; title?: string | null }
   | { kind: "level"; value: AlertLevel; title?: never };
 
-export function StatusBadge({ kind, value, title }: Props) {
+export const StatusBadge = ({ kind, value, title }: Props) => {
   const key = value ?? "pending";
   return (
     <Badge bg={variants[kind][key] ?? "secondary"} title={title ?? undefined}>
       {tOrFallback(`statuses.${kind}.${key}`, key)}
     </Badge>
   );
-}
+};

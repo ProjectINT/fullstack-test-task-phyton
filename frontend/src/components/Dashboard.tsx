@@ -20,7 +20,7 @@ type Props = {
   initialAlerts: AlertItem[];
 };
 
-export function Dashboard({ initialFiles, initialAlerts }: Props) {
+export const Dashboard = ({ initialFiles, initialAlerts }: Props) => {
   const t = useTranslations("page");
   const files = usePagedResource(getFiles, initialFiles);
   const alerts = usePagedResource(getAlerts, initialAlerts);
@@ -40,10 +40,10 @@ export function Dashboard({ initialFiles, initialAlerts }: Props) {
   const refetchFiles = files.refetch;
   const refetchAlerts = alerts.refetch;
 
-  function refetchAll() {
+  const refetchAll = () => {
     refetchFiles();
     refetchAlerts();
-  }
+  };
 
   useEffect(() => {
     if (!hasPendingFiles) return;
@@ -134,4 +134,4 @@ export function Dashboard({ initialFiles, initialAlerts }: Props) {
       />
     </Container>
   );
-}
+};

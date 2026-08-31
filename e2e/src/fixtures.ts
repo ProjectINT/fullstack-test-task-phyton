@@ -9,10 +9,10 @@ import { TestFile, TestFileKey, testFile } from "./test-files";
  * Уникальный title: БД общая между тестами и прогонами, поэтому изоляция
  * держится на нём — по нему тест находит свою строку и чистит за собой.
  */
-export function uniqueTitle(testInfo: TestInfo, label = "file"): string {
+export const uniqueTitle = (testInfo: TestInfo, label = "file"): string => {
   const suffix = Math.random().toString(36).slice(2, 8);
   return `${TITLE_PREFIX} w${testInfo.workerIndex} ${label} ${Date.now()}-${suffix}`;
-}
+};
 
 export type UploadFixtureOptions = Omit<UploadOptions, "title"> & {
   /** Готовая фикстура по ключу — короче, чем `file: testFile('clean')`. */
@@ -81,10 +81,10 @@ export const test = base.extend<Fixtures>({
 });
 
 /** Переход на приложение с ожиданием первой отрисовки. */
-export async function gotoApp(page: Page): Promise<DashboardPage> {
+export const gotoApp = async (page: Page): Promise<DashboardPage> => {
   const dashboard = new DashboardPage(page);
   await dashboard.goto();
   return dashboard;
-}
+};
 
 export { DashboardPage, expect };

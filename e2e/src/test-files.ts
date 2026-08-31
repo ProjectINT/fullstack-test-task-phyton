@@ -80,15 +80,15 @@ export type TestFile = {
   size: number;
 };
 
-function specPath(spec: FixtureSpec): string {
+const specPath = (spec: FixtureSpec): string => {
   return path.join(FIXTURES_DIR, spec.name);
-}
+};
 
 /**
  * Пишет файл на диск, если его ещё нет или размер разошёлся с ожидаемым.
  * Идемпотентно: повторные прогоны не переписывают 11 МБ заново.
  */
-function materialize(key: TestFileKey, spec: FixtureSpec): TestFile {
+const materialize = (key: TestFileKey, spec: FixtureSpec): TestFile => {
   const filePath = specPath(spec);
   const content = spec.build();
   const current = fs.existsSync(filePath) ? fs.statSync(filePath) : null;
@@ -104,10 +104,10 @@ function materialize(key: TestFileKey, spec: FixtureSpec): TestFile {
     path: filePath,
     size: content.length,
   };
-}
+};
 
 /** Создаёт все фикстуры на диске. Вызывается из globalSetup. */
-export function ensureTestFiles(): Record<TestFileKey, TestFile> {
+export const ensureTestFiles = (): Record<TestFileKey, TestFile> => {
   fs.mkdirSync(FIXTURES_DIR, { recursive: true });
 
   const result = {} as Record<TestFileKey, TestFile>;
@@ -115,20 +115,20 @@ export function ensureTestFiles(): Record<TestFileKey, TestFile> {
     result[key] = materialize(key, spec);
   }
   return result;
-}
+};
 
 /**
  * Дескриптор фикстуры для использования в тесте. Файл материализуется лениво,
  * так что тест работает и без предварительного globalSetup (например, под `--ui`).
  */
-export function testFile(key: TestFileKey): TestFile {
+export const testFile = (key: TestFileKey): TestFile => {
   fs.mkdirSync(FIXTURES_DIR, { recursive: true });
   return materialize(key, SPECS[key]);
-}
+};
 
 /** Содержимое фикстуры — для побайтового сравнения при скачивании (фаза 5). */
-export function testFileContent(key: TestFileKey): Buffer {
+export const testFileContent = (key: TestFileKey): Buffer => {
   return SPECS[key].build();
-}
+};
 
 export const testFileKeys = Object.keys(SPECS) as TestFileKey[];
