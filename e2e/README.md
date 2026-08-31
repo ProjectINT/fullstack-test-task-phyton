@@ -47,10 +47,11 @@ e2e/
 │   ├── api.ts             # клиент бэкенда поверх request-контекста Playwright
 │   ├── fixtures.ts        # test.extend: api, uploadFile, uploadedFile, appPage, dashboard
 │   └── pages/
-│       └── dashboard.ts   # page object главной страницы (секции, счётчики, спиннеры)
+│       └── dashboard.ts   # page object главной страницы (секции, строки, модалка загрузки)
 └── tests/
     ├── smoke.spec.ts      # фаза 0: инфраструктура жива
-    └── smoke-ui.spec.ts   # фаза 1: smoke UI
+    ├── smoke-ui.spec.ts   # фаза 1: smoke UI
+    └── upload.spec.ts     # фаза 2: загрузка файла (happy path)
 ```
 
 ## Фикстуры Playwright
@@ -63,6 +64,13 @@ e2e/
 - `dashboard` — та же страница как page object `DashboardPage`: секции
   `files`/`alerts` со счётчиком, спиннером и таблицей, плюс `refresh()`,
   `mockLists()` и `delayLists()` для перехвата клиентских запросов.
+  Для загрузки через UI: `openUploadModal()` / `uploadViaUi()`, доступ к строкам —
+  `fileRow(title)` и `alertRow(fileTitle)`, ожидание воркера через «Обновить» —
+  `refreshUntilStatus(row, 'processed')`.
+
+Файл, загруженный через UI, известен тесту только по `title`: его id (для
+проверок и teardown) достаётся через `api.waitForFileByTitle(title)` — этот
+хелпер сразу регистрирует запись в авто-очистке.
 
 ## Изоляция
 

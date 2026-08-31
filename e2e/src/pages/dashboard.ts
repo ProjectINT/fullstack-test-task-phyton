@@ -1,6 +1,6 @@
 import { Locator, Page, expect } from "@playwright/test";
 
-import { API_URL, APP_PATH } from "../config";
+import { API_URL, APP_PATH, PROCESSING_TIMEOUT_MS } from "../config";
 
 /**
  * Секция-карточка с таблицей («Файлы» или «Алерты»): заголовок, счётчик-бейдж,
@@ -49,6 +49,102 @@ export class TableSection {
   }
 }
 
+
+/** Строка таблицы файлов: ячейки в том же порядке, что и колонки `FilesTable`. */
+export class FileRow {
+  readonly cells: Locator;
+  readonly title: Locator;
+  readonly originalName: Locator;
+  readonly mimeType: Locator;
+  readonly size: Locator;
+  /** Бейдж `processing_status`: uploaded / processing / processed / failed. */
+  readonly status: Locator;
+  /** Бейдж `scan_status`; в его `title` лежат `scan_details`. */
+  readonly scan: Locator;
+  readonly createdAt: Locator;
+  readonly downloadLink: Locator;
+  readonly renameButton: Locator;
+  readonly deleteButton: Locator;
+
+  constructor(readonly root: Locator) {
+    this.cells = root.locator("td");
+    this.title = this.cells.nth(0);
+    this.originalName = this.cells.nth(1);
+    this.mimeType = this.cells.nth(2);
+    this.size = this.cells.nth(3);
+    this.status = this.cells.nth(4).locator(".badge");
+    this.scan = this.cells.nth(5).locator(".badge");
+    this.createdAt = this.cells.nth(6);
+    this.downloadLink = root.getByRole("link", { name: "Скачать" });
+    this.renameButton = root.getByRole("button", { name: "Переименовать" });
+    this.deleteButton = root.getByRole("button", { name: "Удалить" });
+  }
+}
+
+/** Строка таблицы алертов: файл (кнопка-ссылка с title файла), уровень, сообщение, дата. */
+export class AlertRow {
+  readonly cells: Locator;
+  readonly fileButton: Locator;
+  readonly level: Locator;
+  readonly message: Locator;
+  readonly createdAt: Locator;
+
+  constructor(readonly root: Locator) {
+    this.cells = root.locator("td");
+    this.fileButton = this.cells.nth(0).getByRole("button");
+    this.level = this.cells.nth(1).locator(".badge");
+    this.message = this.cells.nth(2);
+    this.createdAt = this.cells.nth(3);
+  }
+}
+
+/** Модалка «Добавить файл». */
+export class UploadModal {
+  readonly root: Locator;
+  readonly title: Locator;
+  readonly titleInput: Locator;
+  readonly fileInput: Locator;
+  readonly cancelButton: Locator;
+  readonly submitButton: Locator;
+  /** Крестик в шапке модалки. */
+  readonly closeButton: Locator;
+  readonly error: Locator;
+
+  constructor(readonly page: Page) {
+    this.root = page.getByRole("dialog").filter({ has: page.locator(".modal-title") });
+    this.title = this.root.locator(".modal-title");
+    this.titleInput = this.root.getByPlaceholder("Например, Договор с подрядчиком");
+    this.fileInput = this.root.locator("input[type='file']");
+    this.cancelButton = this.root.getByRole("button", { name: "Отмена" });
+    this.submitButton = this.root.getByRole("button", { name: /Сохранить|Загрузка\.\.\./ });
+    this.closeButton = this.root.locator(".btn-close");
+    this.error = this.root.locator(".alert-danger");
+  }
+
+  async expectOpen(): Promise<void> {
+    await expect(this.root).toBeVisible();
+    await expect(this.title).toHaveText("Добавить файл");
+  }
+
+  async expectClosed(): Promise<void> {
+    await expect(this.root).toBeHidden();
+  }
+
+  /** Заполняет форму; любое из полей можно пропустить (сценарии валидации). */
+  async fill({ title, filePath }: { title?: string; filePath?: string }): Promise<void> {
+    if (title !== undefined) {
+      await this.titleInput.fill(title);
+    }
+    if (filePath !== undefined) {
+      await this.fileInput.setInputFiles(filePath);
+    }
+  }
+
+  async submit(): Promise<void> {
+    await this.submitButton.click();
+  }
+}
+
 /** Главная (и единственная) страница приложения. */
 export class DashboardPage {
   readonly heading: Locator;
@@ -57,6 +153,7 @@ export class DashboardPage {
   readonly addFileButton: Locator;
   readonly files: TableSection;
   readonly alerts: TableSection;
+  readonly uploadModal: UploadModal;
 
   constructor(readonly page: Page) {
     this.heading = page.getByRole("heading", { name: "Управление файлами", level: 1 });
@@ -67,11 +164,69 @@ export class DashboardPage {
     this.addFileButton = page.getByRole("button", { name: "Добавить файл" });
     this.files = new TableSection(page, "Файлы", "Файлы пока не загружены");
     this.alerts = new TableSection(page, "Алерты", "Алертов пока нет");
+    this.uploadModal = new UploadModal(page);
   }
 
   async goto(): Promise<void> {
     await this.page.goto(APP_PATH, { waitUntil: "domcontentloaded" });
     await expect(this.heading).toBeVisible();
+  }
+
+  /** Открывает модалку загрузки и дожидается её появления. */
+  async openUploadModal(): Promise<UploadModal> {
+    await this.addFileButton.click();
+    await this.uploadModal.expectOpen();
+    return this.uploadModal;
+  }
+
+  /** Строка файла по его (уникальному в рамках теста) названию. */
+  fileRow(title: string): FileRow {
+    return new FileRow(this.files.rows.filter({ hasText: title }));
+  }
+
+  /** Строка алерта по названию файла — в таблице алертов показан именно title. */
+  alertRow(fileTitle: string): AlertRow {
+    return new AlertRow(this.alerts.rows.filter({ hasText: fileTitle }));
+  }
+
+  /**
+   * Загрузка через UI: заполнить форму, отправить, дождаться закрытия модалки.
+   * Сам файл появляется в таблице после `onUploaded` → refetch обеих таблиц.
+   */
+  async uploadViaUi({ title, filePath }: { title: string; filePath: string }): Promise<FileRow> {
+    const modal = await this.openUploadModal();
+    await modal.fill({ title, filePath });
+    await modal.submit();
+    await modal.expectClosed();
+
+    const row = this.fileRow(title);
+    await expect(row.root).toBeVisible();
+    return row;
+  }
+
+  /**
+   * Ждёт нужный `processing_status`, прожимая «Обновить»: UI сам не знает,
+   * когда воркер закончил (фоновый поллинг есть, но тест не должен на него
+   * полагаться).
+   */
+  async refreshUntilStatus(
+    row: FileRow,
+    status: string,
+    timeout = PROCESSING_TIMEOUT_MS,
+  ): Promise<void> {
+    await expect
+      .poll(
+        async () => {
+          await this.refresh();
+          return row.status.innerText();
+        },
+        {
+          timeout,
+          intervals: [500, 1000, 2000],
+          message: `файл не дошёл до статуса «${status}» за ${timeout} мс`,
+        },
+      )
+      .toBe(status);
   }
 
   /** «Обновить» + ожидание, пока спиннеры обеих таблиц погаснут. */

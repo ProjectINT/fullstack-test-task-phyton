@@ -49,6 +49,9 @@ export type UploadOptions = {
 
 const TERMINAL_STATUSES: ProcessingStatus[] = ["processed", "failed"];
 
+/** Сколько ждём, пока запись появится в выдаче списка (поиск по title). */
+const LOOKUP_TIMEOUT_MS = 15_000;
+
 function resolvePayload(options: UploadOptions): {
   name: string;
   mimeType: string;
@@ -128,6 +131,39 @@ export class Api {
     const response = await this.listFilesResponse(params);
     expect(response.ok(), `GET /files: ${await response.text()}`).toBeTruthy();
     return (await response.json()) as FileItem[];
+  }
+
+  /**
+   * Ищет файл по точному title среди свежих записей (список отсортирован по
+   * `created_at desc`). Нужен для файлов, загруженных через UI: тест знает
+   * только title, а id требуется и для проверок, и для очистки в teardown.
+   */
+  async findFileByTitle(title: string): Promise<FileItem | undefined> {
+    const files = await this.listFiles({ limit: 1000 });
+    const found = files.find((file) => file.title === title);
+    if (found) {
+      this.createdFileIds.add(found.id);
+    }
+    return found;
+  }
+
+  /** То же, но с ожиданием: строка появляется не мгновенно после сабмита формы. */
+  async waitForFileByTitle(title: string, timeout = LOOKUP_TIMEOUT_MS): Promise<FileItem> {
+    let found: FileItem | undefined;
+    await expect
+      .poll(
+        async () => {
+          found = await this.findFileByTitle(title);
+          return Boolean(found);
+        },
+        {
+          timeout,
+          intervals: [200, 300, 500, 1000],
+          message: `файл с title «${title}» не появился в GET /files за ${timeout} мс`,
+        },
+      )
+      .toBe(true);
+    return found!;
   }
 
   async getFileResponse(fileId: string): Promise<APIResponse> {
