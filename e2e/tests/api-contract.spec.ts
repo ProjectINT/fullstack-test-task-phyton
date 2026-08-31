@@ -88,22 +88,34 @@ test.describe("phase 6: GET /files — пагинация", () => {
     const seeded = await seedNewestFirst(uploadFile, 3);
     const expectedIds = seeded.map((file) => file.id);
 
-    // Чужие загрузки (параллельные воркеры) встают в голову списка и сдвигают
-    // наш срез, поэтому позицию и выборку по ней сверяем одним retry-блоком.
+    // БД общая: соседние воркеры и пишут, и удаляют записи, поэтому срез
+    // сверяется не с seed-файлами (между ними может вклиниться чужая загрузка),
+    // а со снимком всей выдачи. Снимок перечитывается после страниц: совпал —
+    // страницы читались из той же выдачи и сравнение корректно, не совпал —
+    // блок повторяется.
     await expect(async () => {
-      const all = await api.listFiles({ limit: LIMIT_MAX });
-      const offset = all.findIndex((file) => file.id === expectedIds[0]);
+      const snapshot = (await api.listFiles({ limit: LIMIT_MAX })).map((file) => file.id);
+      const offset = snapshot.indexOf(expectedIds[0]);
       expect(offset, "seed-файлы не попали в выдачу").toBeGreaterThanOrEqual(0);
 
       const page = await api.listFiles({ limit: 3, offset });
-      expect(page.map((file) => file.id)).toEqual(expectedIds);
-
-      // Тот же срез по одной записи: offset двигает окно ровно на шаг.
-      for (const [index, id] of expectedIds.entries()) {
+      // Тот же участок по одной записи: offset двигает окно ровно на шаг.
+      const steps: string[][] = [];
+      for (let index = 0; index < 3; index += 1) {
         const single = await api.listFiles({ limit: 1, offset: offset + index });
-        expect(single.map((file) => file.id)).toEqual([id]);
+        steps.push(single.map((file) => file.id));
       }
-    }).toPass({ timeout: 15_000, intervals: [200, 500, 1_000] });
+
+      const after = (await api.listFiles({ limit: LIMIT_MAX })).map((file) => file.id);
+      expect(after, "выдача изменилась во время чтения страниц").toEqual(snapshot);
+
+      expect(page.map((file) => file.id)).toEqual(snapshot.slice(offset, offset + 3));
+      expect(steps).toEqual(snapshot.slice(offset, offset + 3).map((id) => [id]));
+
+      // Наши записи идут в выдаче в том же порядке, в каком создавались.
+      const positions = expectedIds.map((id) => snapshot.indexOf(id));
+      expect(positions).toEqual([...positions].sort((left, right) => left - right));
+    }).toPass({ timeout: 30_000, intervals: [200, 500, 1_000] });
 
     // Записи идут строго от новых к старым.
     const timestamps = seeded.map((file) => millis(file.created_at));

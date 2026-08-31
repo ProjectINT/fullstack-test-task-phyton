@@ -13,11 +13,21 @@ export const APP_URL = `${FRONTEND_URL}${APP_PATH}`;
 
 export const API_URL = process.env.E2E_API_URL ?? "http://localhost:8000";
 
+/**
+ * В CI и воркер, и бэкенд стартуют «холодными» (сборка образов, первый запрос к
+ * Postgres), поэтому дефолтные ожидания там вдвое-втрое длиннее локальных.
+ */
+const IS_CI = !!process.env.CI;
+
 /** Сколько ждём, пока Celery-воркер доведёт файл до терминального статуса. */
-export const PROCESSING_TIMEOUT_MS = Number(process.env.E2E_PROCESSING_TIMEOUT_MS ?? 30_000);
+export const PROCESSING_TIMEOUT_MS = Number(
+  process.env.E2E_PROCESSING_TIMEOUT_MS ?? (IS_CI ? 60_000 : 30_000),
+);
 
 /** Сколько ждём готовности стека в globalSetup. */
-export const STACK_READY_TIMEOUT_MS = Number(process.env.E2E_STACK_READY_TIMEOUT_MS ?? 60_000);
+export const STACK_READY_TIMEOUT_MS = Number(
+  process.env.E2E_STACK_READY_TIMEOUT_MS ?? (IS_CI ? 180_000 : 60_000),
+);
 
 /** Префикс в title — по нему тестовые записи отличимы от чужих в общей БД. */
 export const TITLE_PREFIX = "[e2e]";

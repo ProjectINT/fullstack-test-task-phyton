@@ -99,6 +99,9 @@ export class AlertRow {
   }
 }
 
+/** Сколько ждём гидратации React после отрисовки серверной разметки. */
+const HYDRATION_TIMEOUT_MS = 15_000;
+
 /** Модалка «Добавить файл». */
 export class UploadModal {
   readonly root: Locator;
@@ -171,6 +174,27 @@ export class DashboardPage {
   async goto(): Promise<void> {
     await this.page.goto(APP_PATH, { waitUntil: "domcontentloaded" });
     await expect(this.heading).toBeVisible();
+    await this.waitForHydration();
+  }
+
+  /**
+   * Разметку страницы отдаёт сервер (`app/page.tsx`), а обработчики React
+   * вешает при гидратации — клик в этот промежуток пропадает молча. Под
+   * нагрузкой (полный прогон в 16 воркеров) окно расширяется и даёт flaky
+   * «модалка не открылась». Гидратированный узел React помечает свойствами
+   * `__reactFiber$…`/`__reactProps$…` — ждём их на кнопке из шапки.
+   */
+  private async waitForHydration(): Promise<void> {
+    const button = await this.addFileButton.elementHandle();
+    try {
+      await this.page.waitForFunction(
+        (element) => Object.keys(element).some((key) => key.startsWith("__reactProps$")),
+        button,
+        { timeout: HYDRATION_TIMEOUT_MS },
+      );
+    } finally {
+      await button?.dispose();
+    }
   }
 
   /** Открывает модалку загрузки и дожидается её появления. */
