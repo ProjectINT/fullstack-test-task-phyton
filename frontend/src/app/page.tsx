@@ -1,22 +1,48 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Card, Col, Container, Row } from "react-bootstrap";
 import { AlertsTable } from "@/components/AlertsTable";
+import { ConfirmDeleteModal } from "@/components/ConfirmDeleteModal";
 import { FilesTable } from "@/components/FilesTable";
+import { RenameModal } from "@/components/RenameModal";
 import { UploadModal } from "@/components/UploadModal";
 import { usePagedResource } from "@/hooks/usePagedResource";
 import { getAlerts, getFiles } from "@/lib/api";
+import type { FileItem } from "@/lib/types";
+
+const POLL_INTERVAL_MS = 4000;
 
 export default function Page() {
   const files = usePagedResource(getFiles);
   const alerts = usePagedResource(getAlerts);
-  const [showModal, setShowModal] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [fileToRename, setFileToRename] = useState<FileItem | null>(null);
+  const [fileToDelete, setFileToDelete] = useState<FileItem | null>(null);
+  const [highlightedFileId, setHighlightedFileId] = useState<string | null>(null);
 
   function refetchAll() {
     void files.refetch();
     void alerts.refetch();
   }
+
+  // Пока есть файлы в нетерминальных статусах — тихо обновляем обе таблицы,
+  // чтобы статусы и алерты подтягивались без ручного «Обновить».
+  const hasPendingFiles = files.items.some(
+    (file) =>
+      file.processing_status === "uploaded" || file.processing_status === "processing"
+  );
+  const refetchFiles = files.refetch;
+  const refetchAlerts = alerts.refetch;
+
+  useEffect(() => {
+    if (!hasPendingFiles) return;
+    const intervalId = setInterval(() => {
+      void refetchFiles({ silent: true });
+      void refetchAlerts({ silent: true });
+    }, POLL_INTERVAL_MS);
+    return () => clearInterval(intervalId);
+  }, [hasPendingFiles, refetchFiles, refetchAlerts]);
 
   return (
     <Container fluid className="py-4 px-4 bg-light min-vh-100">
@@ -35,7 +61,7 @@ export default function Page() {
                   <Button variant="outline-secondary" onClick={refetchAll}>
                     Обновить
                   </Button>
-                  <Button variant="primary" onClick={() => setShowModal(true)}>
+                  <Button variant="primary" onClick={() => setShowUploadModal(true)}>
                     Добавить файл
                   </Button>
                 </div>
@@ -48,6 +74,16 @@ export default function Page() {
             isLoading={files.isLoading}
             isRefreshing={files.isRefreshing}
             error={files.error}
+            pagination={{
+              page: files.page,
+              hasPrev: files.hasPrev,
+              hasNext: files.hasNext,
+              onPrev: files.prevPage,
+              onNext: files.nextPage,
+            }}
+            highlightedFileId={highlightedFileId}
+            onRename={setFileToRename}
+            onDelete={setFileToDelete}
           />
 
           <AlertsTable
@@ -55,14 +91,38 @@ export default function Page() {
             isLoading={alerts.isLoading}
             isRefreshing={alerts.isRefreshing}
             error={alerts.error}
+            pagination={{
+              page: alerts.page,
+              hasPrev: alerts.hasPrev,
+              hasNext: alerts.hasNext,
+              onPrev: alerts.prevPage,
+              onNext: alerts.nextPage,
+            }}
+            highlightedFileId={highlightedFileId}
+            onFileClick={(fileId) =>
+              setHighlightedFileId((prev) => (prev === fileId ? null : fileId))
+            }
           />
         </Col>
       </Row>
 
       <UploadModal
-        show={showModal}
-        onClose={() => setShowModal(false)}
+        show={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
         onUploaded={refetchAll}
+      />
+
+      <RenameModal
+        file={fileToRename}
+        onClose={() => setFileToRename(null)}
+        onRenamed={() => void files.refetch()}
+      />
+
+      <ConfirmDeleteModal
+        file={fileToDelete}
+        onClose={() => setFileToDelete(null)}
+        // Алерты удалённого файла тоже пропадают — обновляем обе таблицы.
+        onDeleted={refetchAll}
       />
     </Container>
   );

@@ -1,19 +1,41 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { Alert, Badge, Button, Card, Spinner, Table } from "react-bootstrap";
 import { fileDownloadUrl } from "@/lib/api";
 import { formatDate, formatSize } from "@/lib/format";
 import type { FileItem } from "@/lib/types";
 import { ProcessingStatusBadge, ScanStatusBadge } from "./StatusBadge";
+import { TablePagination, type PaginationControls } from "./TablePagination";
 
 type Props = {
   files: FileItem[];
   isLoading: boolean;
   isRefreshing: boolean;
   error: string | null;
+  pagination: PaginationControls;
+  highlightedFileId: string | null;
+  onRename: (file: FileItem) => void;
+  onDelete: (file: FileItem) => void;
 };
 
-export function FilesTable({ files, isLoading, isRefreshing, error }: Props) {
+export function FilesTable({
+  files,
+  isLoading,
+  isRefreshing,
+  error,
+  pagination,
+  highlightedFileId,
+  onRename,
+  onDelete,
+}: Props) {
+  const highlightedRowRef = useRef<HTMLTableRowElement | null>(null);
+
+  // Прокручиваем к подсвеченному файлу (клик по file_id в таблице алертов).
+  useEffect(() => {
+    highlightedRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightedFileId]);
+
   return (
     <Card className="shadow-sm border-0 mb-4">
       <Card.Header className="bg-white border-0 pt-4 px-4">
@@ -32,65 +54,88 @@ export function FilesTable({ files, isLoading, isRefreshing, error }: Props) {
             <Spinner animation="border" />
           </div>
         ) : (
-          <div className={`table-responsive${isRefreshing ? " opacity-50" : ""}`}>
-            <Table hover bordered className="align-middle mb-0">
-              <thead className="table-light">
-                <tr>
-                  <th>Название</th>
-                  <th>Файл</th>
-                  <th>MIME</th>
-                  <th>Размер</th>
-                  <th>Статус</th>
-                  <th>Проверка</th>
-                  <th>Создан</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {files.length === 0 ? (
+          <>
+            <div className={`table-responsive${isRefreshing ? " opacity-50" : ""}`}>
+              <Table hover bordered className="align-middle mb-0">
+                <thead className="table-light">
                   <tr>
-                    <td colSpan={8} className="text-center py-4 text-secondary">
-                      Файлы пока не загружены
-                    </td>
+                    <th>Название</th>
+                    <th>Файл</th>
+                    <th>MIME</th>
+                    <th>Размер</th>
+                    <th>Статус</th>
+                    <th>Проверка</th>
+                    <th>Создан</th>
+                    <th></th>
                   </tr>
-                ) : (
-                  files.map((file) => (
-                    <tr key={file.id}>
-                      <td>
-                        <div className="fw-semibold">{file.title}</div>
-                        <div className="small text-secondary">{file.id}</div>
-                      </td>
-                      <td>{file.original_name}</td>
-                      <td>{file.mime_type}</td>
-                      <td>{formatSize(file.size)}</td>
-                      <td>
-                        <ProcessingStatusBadge status={file.processing_status} />
-                      </td>
-                      <td>
-                        <div className="d-flex flex-column gap-1">
-                          <ScanStatusBadge status={file.scan_status} />
-                          <span className="small text-secondary">
-                            {file.scan_details ?? "Ожидает обработки"}
-                          </span>
-                        </div>
-                      </td>
-                      <td>{formatDate(file.created_at)}</td>
-                      <td className="text-nowrap">
-                        <Button
-                          as="a"
-                          href={fileDownloadUrl(file.id)}
-                          variant="outline-primary"
-                          size="sm"
-                        >
-                          Скачать
-                        </Button>
+                </thead>
+                <tbody>
+                  {files.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="text-center py-4 text-secondary">
+                        Файлы пока не загружены
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </Table>
-          </div>
+                  ) : (
+                    files.map((file) => (
+                      <tr
+                        key={file.id}
+                        ref={file.id === highlightedFileId ? highlightedRowRef : null}
+                        className={file.id === highlightedFileId ? "table-warning" : undefined}
+                      >
+                        <td>
+                          <div className="fw-semibold">{file.title}</div>
+                          <div className="small text-secondary">{file.id}</div>
+                        </td>
+                        <td>{file.original_name}</td>
+                        <td>{file.mime_type}</td>
+                        <td>{formatSize(file.size)}</td>
+                        <td>
+                          <ProcessingStatusBadge status={file.processing_status} />
+                        </td>
+                        <td>
+                          <div className="d-flex flex-column gap-1">
+                            <ScanStatusBadge status={file.scan_status} />
+                            <span className="small text-secondary">
+                              {file.scan_details ?? "Ожидает обработки"}
+                            </span>
+                          </div>
+                        </td>
+                        <td>{formatDate(file.created_at)}</td>
+                        <td className="text-nowrap">
+                          <div className="d-flex gap-1">
+                            <Button
+                              as="a"
+                              href={fileDownloadUrl(file.id)}
+                              variant="outline-primary"
+                              size="sm"
+                            >
+                              Скачать
+                            </Button>
+                            <Button
+                              variant="outline-secondary"
+                              size="sm"
+                              onClick={() => onRename(file)}
+                            >
+                              Переименовать
+                            </Button>
+                            <Button
+                              variant="outline-danger"
+                              size="sm"
+                              onClick={() => onDelete(file)}
+                            >
+                              Удалить
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </Table>
+            </div>
+            <TablePagination {...pagination} />
+          </>
         )}
       </Card.Body>
     </Card>

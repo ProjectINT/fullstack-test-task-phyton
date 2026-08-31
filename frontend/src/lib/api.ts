@@ -24,6 +24,11 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(detail ?? `Не удалось выполнить запрос (${response.status})`);
   }
 
+  // DELETE отвечает 204 без тела — json() упал бы.
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
   return response.json() as Promise<T>;
 }
 
@@ -53,6 +58,18 @@ export function uploadFile(title: string, file: File) {
   formData.append("file", file);
 
   return apiFetch<FileItem>("/files", { method: "POST", body: formData });
+}
+
+export function renameFile(fileId: string, title: string) {
+  return apiFetch<FileItem>(`/files/${fileId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+}
+
+export function deleteFile(fileId: string) {
+  return apiFetch<void>(`/files/${fileId}`, { method: "DELETE" });
 }
 
 export function fileDownloadUrl(fileId: string) {
