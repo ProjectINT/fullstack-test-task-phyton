@@ -1,6 +1,8 @@
+import { ApiError, isAbortError, logApiError } from "./errors";
 import type { AlertItem, FileItem } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const REQUEST_TIMEOUT_MS = 30_000;
 
 export type PageParams = {
   limit?: number;
@@ -8,28 +10,72 @@ export type PageParams = {
   signal?: AbortSignal;
 };
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
-    cache: "no-store",
-    ...init,
-  });
+async function request(path: string, init?: RequestInit): Promise<Response> {
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  const signal = init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      cache: "no-store",
+      ...init,
+      signal,
+    });
+  } catch (error) {
+    // Отмену вызывающим пробрасываем как есть — потребители фильтруют её через isAbortError.
+    if (isAbortError(error)) throw error;
+    const kind =
+      error instanceof DOMException && error.name === "TimeoutError"
+        ? "timeout"
+        : "network";
+    throw fail(new ApiError({ kind, path }));
+  }
 
   if (!response.ok) {
-    const detail = await response
-      .json()
-      .then((data: { detail?: unknown }) =>
-        typeof data.detail === "string" ? data.detail : null
+    throw fail(
+      new ApiError({
+        kind: "http",
+        path,
+        status: response.status,
+        detail: await extractDetail(response),
+      })
+    );
+  }
+
+  return response;
+}
+
+function fail(error: ApiError): ApiError {
+  logApiError(error);
+  return error;
+}
+
+async function extractDetail(response: Response): Promise<string | null> {
+  const data = (await response.json().catch(() => null)) as {
+    detail?: unknown;
+  } | null;
+  const detail = data?.detail;
+  if (typeof detail === "string") return detail;
+  // 422 от FastAPI: detail — массив ошибок валидации с полем msg.
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item: { msg?: unknown }) =>
+        typeof item?.msg === "string" ? item.msg : null
       )
-      .catch(() => null);
-    throw new Error(detail ?? `Не удалось выполнить запрос (${response.status})`);
+      .filter((msg): msg is string => msg !== null);
+    if (messages.length > 0) return messages.join("; ");
   }
+  return null;
+}
 
-  // DELETE отвечает 204 без тела — json() упал бы.
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await request(path, init);
   return response.json() as Promise<T>;
+}
+
+/** Для запросов без тела ответа (DELETE → 204). */
+async function apiFetchVoid(path: string, init?: RequestInit): Promise<void> {
+  await request(path, init);
 }
 
 function withQuery(path: string, { limit, offset }: PageParams) {
@@ -69,7 +115,7 @@ export function renameFile(fileId: string, title: string) {
 }
 
 export function deleteFile(fileId: string) {
-  return apiFetch<void>(`/files/${fileId}`, { method: "DELETE" });
+  return apiFetchVoid(`/files/${fileId}`, { method: "DELETE" });
 }
 
 export function fileDownloadUrl(fileId: string) {

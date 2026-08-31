@@ -1,4 +1,5 @@
 import { Badge } from "react-bootstrap";
+import { tOrFallback } from "@/i18n";
 import type { AlertLevel, ProcessingStatus, ScanStatus } from "@/lib/types";
 
 type Variant = "success" | "warning" | "danger" | "secondary";
@@ -23,7 +24,11 @@ const levelVariants: Record<AlertLevel, Variant> = {
 };
 
 export function ProcessingStatusBadge({ status }: { status: ProcessingStatus }) {
-  return <Badge bg={processingVariants[status] ?? "secondary"}>{status}</Badge>;
+  return (
+    <Badge bg={processingVariants[status] ?? "secondary"}>
+      {tOrFallback(`statuses.processing.${status}`, status)}
+    </Badge>
+  );
 }
 
 export function ScanStatusBadge({
@@ -38,11 +43,15 @@ export function ScanStatusBadge({
       bg={status ? scanVariants[status] ?? "secondary" : "secondary"}
       title={details ?? undefined}
     >
-      {status ?? "pending"}
+      {tOrFallback(`statuses.scan.${status ?? "pending"}`, status ?? "pending")}
     </Badge>
   );
 }
 
 export function AlertLevelBadge({ level }: { level: AlertLevel }) {
-  return <Badge bg={levelVariants[level] ?? "secondary"}>{level}</Badge>;
+  return (
+    <Badge bg={levelVariants[level] ?? "secondary"}>
+      {tOrFallback(`statuses.level.${level}`, level)}
+    </Badge>
+  );
 }

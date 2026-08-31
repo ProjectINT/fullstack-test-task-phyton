@@ -2,7 +2,9 @@
 
 import { FormEvent, useState } from "react";
 import { Alert, Button, Form, Modal } from "react-bootstrap";
+import { useTranslations } from "@/i18n";
 import { uploadFile } from "@/lib/api";
+import { toUserMessage } from "@/lib/errors";
 
 type Props = {
   show: boolean;
@@ -11,6 +13,8 @@ type Props = {
 };
 
 export function UploadModal({ show, onClose, onUploaded }: Props) {
+  const t = useTranslations("uploadModal");
+  const tCommon = useTranslations("common");
   const [title, setTitle] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -27,7 +31,7 @@ export function UploadModal({ show, onClose, onUploaded }: Props) {
     event.preventDefault();
 
     if (!title.trim() || !selectedFile) {
-      setFormError("Укажите название и выберите файл");
+      setFormError(t("validation"));
       return;
     }
 
@@ -39,7 +43,7 @@ export function UploadModal({ show, onClose, onUploaded }: Props) {
       handleClose();
       onUploaded();
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Произошла ошибка");
+      setFormError(toUserMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -49,20 +53,20 @@ export function UploadModal({ show, onClose, onUploaded }: Props) {
     <Modal show={show} onHide={handleClose} centered>
       <Form onSubmit={handleSubmit}>
         <Modal.Header closeButton>
-          <Modal.Title>Добавить файл</Modal.Title>
+          <Modal.Title>{t("title")}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {formError ? <Alert variant="danger">{formError}</Alert> : null}
           <Form.Group className="mb-3">
-            <Form.Label>Название</Form.Label>
+            <Form.Label>{t("titleLabel")}</Form.Label>
             <Form.Control
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder="Например, Договор с подрядчиком"
+              placeholder={t("titlePlaceholder")}
             />
           </Form.Group>
           <Form.Group>
-            <Form.Label>Файл</Form.Label>
+            <Form.Label>{t("fileLabel")}</Form.Label>
             <Form.Control
               type="file"
               onChange={(event) =>
@@ -73,10 +77,10 @@ export function UploadModal({ show, onClose, onUploaded }: Props) {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="outline-secondary" onClick={handleClose}>
-            Отмена
+            {tCommon("cancel")}
           </Button>
           <Button type="submit" variant="primary" disabled={isSubmitting}>
-            {isSubmitting ? "Загрузка..." : "Сохранить"}
+            {isSubmitting ? t("submitting") : tCommon("save")}
           </Button>
         </Modal.Footer>
       </Form>

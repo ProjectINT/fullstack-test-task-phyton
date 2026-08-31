@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import 'bootstrap/dist/css/bootstrap.min.css';
+import { t } from "@/i18n";
 
 export const metadata: Metadata = {
-  title: 'Тестовое задание Fullstack',
-  description: 'Тестовое задание Fullstack',
+  title: t("metadata.title"),
+  description: t("metadata.description"),
 };
 
 export default function RootLayout({

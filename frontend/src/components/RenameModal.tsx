@@ -2,7 +2,9 @@
 
 import { FormEvent, useState } from "react";
 import { Alert, Button, Form, Modal } from "react-bootstrap";
+import { useTranslations } from "@/i18n";
 import { renameFile } from "@/lib/api";
+import { toUserMessage } from "@/lib/errors";
 import type { FileItem } from "@/lib/types";
 
 type Props = {
@@ -12,6 +14,8 @@ type Props = {
 };
 
 export function RenameModal({ file, onClose, onRenamed }: Props) {
+  const t = useTranslations("renameModal");
+  const tCommon = useTranslations("common");
   // null — пользователь ещё не редактировал поле, показываем текущее название файла.
   const [title, setTitle] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -31,7 +35,7 @@ export function RenameModal({ file, onClose, onRenamed }: Props) {
 
     const trimmedTitle = displayedTitle.trim();
     if (!trimmedTitle) {
-      setFormError("Укажите название");
+      setFormError(t("validation"));
       return;
     }
 
@@ -43,7 +47,7 @@ export function RenameModal({ file, onClose, onRenamed }: Props) {
       handleClose();
       onRenamed();
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Произошла ошибка");
+      setFormError(toUserMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -53,12 +57,12 @@ export function RenameModal({ file, onClose, onRenamed }: Props) {
     <Modal show={file !== null} onHide={handleClose} centered>
       <Form onSubmit={handleSubmit}>
         <Modal.Header closeButton>
-          <Modal.Title>Переименовать файл</Modal.Title>
+          <Modal.Title>{t("title")}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {formError ? <Alert variant="danger">{formError}</Alert> : null}
           <Form.Group>
-            <Form.Label>Название</Form.Label>
+            <Form.Label>{t("titleLabel")}</Form.Label>
             <Form.Control
               value={displayedTitle}
               onChange={(event) => setTitle(event.target.value)}
@@ -68,10 +72,10 @@ export function RenameModal({ file, onClose, onRenamed }: Props) {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="outline-secondary" onClick={handleClose}>
-            Отмена
+            {tCommon("cancel")}
           </Button>
           <Button type="submit" variant="primary" disabled={isSubmitting}>
-            {isSubmitting ? "Сохранение..." : "Сохранить"}
+            {isSubmitting ? t("submitting") : tCommon("save")}
           </Button>
         </Modal.Footer>
       </Form>

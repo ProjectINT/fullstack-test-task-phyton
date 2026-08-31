@@ -8,12 +8,14 @@ import { FilesTable } from "@/components/FilesTable";
 import { RenameModal } from "@/components/RenameModal";
 import { UploadModal } from "@/components/UploadModal";
 import { usePagedResource } from "@/hooks/usePagedResource";
+import { useTranslations } from "@/i18n";
 import { getAlerts, getFiles } from "@/lib/api";
 import type { FileItem } from "@/lib/types";
 
 const POLL_INTERVAL_MS = 4000;
 
 export default function Page() {
+  const t = useTranslations("page");
   const files = usePagedResource(getFiles);
   const alerts = usePagedResource(getAlerts);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -52,17 +54,15 @@ export default function Page() {
             <Card.Body className="p-4">
               <div className="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                 <div>
-                  <h1 className="h3 mb-2">Управление файлами</h1>
-                  <p className="text-secondary mb-0">
-                    Загрузка файлов, просмотр статусов обработки и ленты алертов.
-                  </p>
+                  <h1 className="h3 mb-2">{t("title")}</h1>
+                  <p className="text-secondary mb-0">{t("subtitle")}</p>
                 </div>
                 <div className="d-flex gap-2">
                   <Button variant="outline-secondary" onClick={refetchAll}>
-                    Обновить
+                    {t("refresh")}
                   </Button>
                   <Button variant="primary" onClick={() => setShowUploadModal(true)}>
-                    Добавить файл
+                    {t("addFile")}
                   </Button>
                 </div>
               </div>

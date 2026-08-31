@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PageParams } from "@/lib/api";
+import { isAbortError, toUserMessage } from "@/lib/errors";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -57,8 +58,8 @@ export function usePagedResource<T>(
           hasLoadedRef.current = true;
         })
         .catch((err: unknown) => {
-          if (controller.signal.aborted) return;
-          setError(err instanceof Error ? err.message : "Произошла ошибка");
+          if (controller.signal.aborted || isAbortError(err)) return;
+          setError(toUserMessage(err));
         })
         .finally(() => {
           if (!controller.signal.aborted) {

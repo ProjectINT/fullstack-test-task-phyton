@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { Alert, Badge, Button, Card, Spinner, Table } from "react-bootstrap";
+import { useTranslations } from "@/i18n";
 import { fileDownloadUrl } from "@/lib/api";
 import { formatDate, formatSize } from "@/lib/format";
 import type { FileItem } from "@/lib/types";
@@ -29,6 +30,7 @@ export function FilesTable({
   onRename,
   onDelete,
 }: Props) {
+  const t = useTranslations("filesTable");
   const highlightedRowRef = useRef<HTMLTableRowElement | null>(null);
 
   // Прокручиваем к подсвеченному файлу (клик по file_id в таблице алертов).
@@ -40,7 +42,7 @@ export function FilesTable({
     <Card className="shadow-sm border-0 mb-4">
       <Card.Header className="bg-white border-0 pt-4 px-4">
         <div className="d-flex justify-content-between align-items-center">
-          <h2 className="h5 mb-0">Файлы</h2>
+          <h2 className="h5 mb-0">{t("title")}</h2>
           <div className="d-flex align-items-center gap-2">
             {isRefreshing ? <Spinner animation="border" size="sm" /> : null}
             <Badge bg="secondary">{files.length}</Badge>
@@ -59,13 +61,13 @@ export function FilesTable({
               <Table hover bordered className="align-middle mb-0">
                 <thead className="table-light">
                   <tr>
-                    <th>Название</th>
-                    <th>Файл</th>
-                    <th>MIME</th>
-                    <th>Размер</th>
-                    <th>Статус</th>
-                    <th>Проверка</th>
-                    <th>Создан</th>
+                    <th>{t("columns.title")}</th>
+                    <th>{t("columns.file")}</th>
+                    <th>{t("columns.mime")}</th>
+                    <th>{t("columns.size")}</th>
+                    <th>{t("columns.status")}</th>
+                    <th>{t("columns.scan")}</th>
+                    <th>{t("columns.createdAt")}</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -73,7 +75,7 @@ export function FilesTable({
                   {files.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="text-center py-4 text-secondary">
-                        Файлы пока не загружены
+                        {t("empty")}
                       </td>
                     </tr>
                   ) : (
@@ -107,21 +109,21 @@ export function FilesTable({
                               variant="outline-primary"
                               size="sm"
                             >
-                              Скачать
+                              {t("download")}
                             </Button>
                             <Button
                               variant="outline-secondary"
                               size="sm"
                               onClick={() => onRename(file)}
                             >
-                              Переименовать
+                              {t("rename")}
                             </Button>
                             <Button
                               variant="outline-danger"
                               size="sm"
                               onClick={() => onDelete(file)}
                             >
-                              Удалить
+                              {t("delete")}
                             </Button>
                           </div>
                         </td>

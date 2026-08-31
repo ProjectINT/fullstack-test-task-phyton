@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { Alert, Button, Modal } from "react-bootstrap";
+import { useTranslations } from "@/i18n";
 import { deleteFile } from "@/lib/api";
+import { toUserMessage } from "@/lib/errors";
 import type { FileItem } from "@/lib/types";
 
 type Props = {
@@ -12,6 +14,8 @@ type Props = {
 };
 
 export function ConfirmDeleteModal({ file, onClose, onDeleted }: Props) {
+  const t = useTranslations("deleteModal");
+  const tCommon = useTranslations("common");
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -31,7 +35,7 @@ export function ConfirmDeleteModal({ file, onClose, onDeleted }: Props) {
       handleClose();
       onDeleted();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Произошла ошибка");
+      setError(toUserMessage(err));
     } finally {
       setIsDeleting(false);
     }
@@ -40,20 +44,18 @@ export function ConfirmDeleteModal({ file, onClose, onDeleted }: Props) {
   return (
     <Modal show={file !== null} onHide={handleClose} centered>
       <Modal.Header closeButton>
-        <Modal.Title>Удалить файл</Modal.Title>
+        <Modal.Title>{t("title")}</Modal.Title>
       </Modal.Header>
       <Modal.Body>
         {error ? <Alert variant="danger">{error}</Alert> : null}
-        <p className="mb-0">
-          Удалить файл «{file?.title}»? Действие необратимо.
-        </p>
+        <p className="mb-0">{t("confirmation", { title: file?.title })}</p>
       </Modal.Body>
       <Modal.Footer>
         <Button variant="outline-secondary" onClick={handleClose}>
-          Отмена
+          {tCommon("cancel")}
         </Button>
         <Button variant="danger" onClick={handleDelete} disabled={isDeleting}>
-          {isDeleting ? "Удаление..." : "Удалить"}
+          {isDeleting ? t("submitting") : t("confirm")}
         </Button>
       </Modal.Footer>
     </Modal>
