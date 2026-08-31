@@ -1,7 +1,13 @@
+from collections.abc import AsyncIterator
 from pathlib import Path
+
+import aiofiles
+import aiofiles.os
 
 from src.core.config import settings
 from src.core.exceptions import StoredFileNotFound
+
+CHUNK_SIZE = 1024 * 1024
 
 settings.storage_dir.mkdir(parents=True, exist_ok=True)
 
@@ -10,20 +16,34 @@ def path_for(stored_name: str) -> Path:
     return settings.storage_dir / stored_name
 
 
-def resolve(stored_name: str) -> Path:
+async def exists(stored_name: str) -> bool:
+    return await aiofiles.os.path.exists(path_for(stored_name))
+
+
+async def resolve(stored_name: str) -> Path:
     path = path_for(stored_name)
-    if not path.exists():
+    if not await aiofiles.os.path.exists(path):
         raise StoredFileNotFound
     return path
 
 
-def save(stored_name: str, content: bytes) -> Path:
+async def save(stored_name: str, chunks: AsyncIterator[bytes]) -> int:
     path = path_for(stored_name)
-    path.write_bytes(content)
-    return path
+    size = 0
+    async with aiofiles.open(path, "wb") as stored:
+        async for chunk in chunks:
+            size += len(chunk)
+            await stored.write(chunk)
+    return size
 
 
-def delete(stored_name: str) -> None:
+async def iter_chunks(stored_name: str) -> AsyncIterator[bytes]:
+    async with aiofiles.open(path_for(stored_name), "rb") as stored:
+        while chunk := await stored.read(CHUNK_SIZE):
+            yield chunk
+
+
+async def delete(stored_name: str) -> None:
     path = path_for(stored_name)
-    if path.exists():
-        path.unlink()
+    if await aiofiles.os.path.exists(path):
+        await aiofiles.os.remove(path)

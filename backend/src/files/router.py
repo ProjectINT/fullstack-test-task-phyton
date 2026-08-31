@@ -43,7 +43,7 @@ async def update_file_view(file_id: str, payload: FileUpdate, session: SessionDe
 @router.get("/{file_id}/download")
 async def download_file_view(file_id: str, session: SessionDep):
     file_item = await service.get_file(session, file_id)
-    stored_path = service.resolve_path(file_item)
+    stored_path = await service.resolve_path(file_item)
     return FileResponse(
         path=stored_path,
         media_type=file_item.mime_type,

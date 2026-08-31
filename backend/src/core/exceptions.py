@@ -27,6 +27,11 @@ class EmptyFile(AppError):
     detail = "File is empty"
 
 
+class FileTooLarge(AppError):
+    status_code = status.HTTP_413_CONTENT_TOO_LARGE
+    detail = "File is too large"
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:

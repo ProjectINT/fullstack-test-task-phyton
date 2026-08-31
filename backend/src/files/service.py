@@ -1,4 +1,6 @@
+import codecs
 import mimetypes
+from collections.abc import AsyncIterator
 from pathlib import Path
 from uuid import uuid4
 
@@ -8,13 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.alerts import repository as alerts_repository
 from src.alerts.enums import AlertLevel
 from src.alerts.models import Alert
-from src.core.exceptions import EmptyFile, FileNotFound
+from src.core.config import settings
+from src.core.exceptions import EmptyFile, FileNotFound, FileTooLarge
 from src.files import repository, storage
 from src.files.enums import ProcessingStatus, ScanStatus
 from src.files.models import StoredFile
 
 SUSPICIOUS_EXTENSIONS = {".exe", ".bat", ".cmd", ".sh", ".js"}
 SUSPICIOUS_SIZE_BYTES = 10 * 1024 * 1024
+PDF_PAGE_MARKER = b"/Type /Page"
 
 
 async def list_files(session: AsyncSession) -> list[StoredFile]:
@@ -28,19 +32,32 @@ async def get_file(session: AsyncSession, file_id: str) -> StoredFile:
     return file_item
 
 
-def resolve_path(file_item: StoredFile) -> Path:
-    return storage.resolve(file_item.stored_name)
+async def resolve_path(file_item: StoredFile) -> Path:
+    return await storage.resolve(file_item.stored_name)
+
+
+async def _read_upload_chunks(upload_file: UploadFile) -> AsyncIterator[bytes]:
+    total = 0
+    while chunk := await upload_file.read(storage.CHUNK_SIZE):
+        total += len(chunk)
+        if total > settings.max_file_size:
+            raise FileTooLarge
+        yield chunk
 
 
 async def create_file(session: AsyncSession, title: str, upload_file: UploadFile) -> StoredFile:
-    content = await upload_file.read()
-    if not content:
-        raise EmptyFile
-
     file_id = str(uuid4())
     suffix = Path(upload_file.filename or "").suffix
     stored_name = f"{file_id}{suffix}"
-    storage.save(stored_name, content)
+
+    try:
+        size = await storage.save(stored_name, _read_upload_chunks(upload_file))
+    except FileTooLarge:
+        await storage.delete(stored_name)
+        raise
+    if size == 0:
+        await storage.delete(stored_name)
+        raise EmptyFile
 
     file_item = StoredFile(
         id=file_id,
@@ -48,7 +65,7 @@ async def create_file(session: AsyncSession, title: str, upload_file: UploadFile
         original_name=upload_file.filename or stored_name,
         stored_name=stored_name,
         mime_type=upload_file.content_type or mimetypes.guess_type(stored_name)[0] or "application/octet-stream",
-        size=len(content),
+        size=size,
         processing_status=ProcessingStatus.UPLOADED,
     )
     repository.add(session, file_item)
@@ -70,7 +87,7 @@ async def delete_file(session: AsyncSession, file_id: str) -> None:
     stored_name = file_item.stored_name
     await repository.delete(session, file_item)
     await session.commit()
-    storage.delete(stored_name)
+    await storage.delete(stored_name)
 
 
 async def scan_file_for_threats(session: AsyncSession, file_id: str) -> bool:
@@ -99,14 +116,49 @@ async def scan_file_for_threats(session: AsyncSession, file_id: str) -> bool:
     return True
 
 
+async def _count_text_stats(stored_name: str) -> tuple[int, int]:
+    """Число строк и символов одним потоковым проходом; multibyte-символы на границе
+    чанков дособирает инкрементальный декодер."""
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="ignore")
+    line_count = 0
+    char_count = 0
+    ends_with_newline = True
+
+    async for chunk in storage.iter_chunks(stored_name):
+        text = decoder.decode(chunk)
+        if text:
+            line_count += text.count("\n")
+            char_count += len(text)
+            ends_with_newline = text.endswith("\n")
+    text = decoder.decode(b"", final=True)
+    if text:
+        line_count += text.count("\n")
+        char_count += len(text)
+        ends_with_newline = text.endswith("\n")
+
+    if char_count and not ends_with_newline:
+        line_count += 1
+    return line_count, char_count
+
+
+async def _count_pdf_pages(stored_name: str) -> int:
+    """Считает вхождения маркера страницы, не теряя те, что попали на границу чанков."""
+    count = 0
+    tail = b""
+    async for chunk in storage.iter_chunks(stored_name):
+        window = tail + chunk
+        count += window.count(PDF_PAGE_MARKER)
+        tail = window[1 - len(PDF_PAGE_MARKER):]
+    return count
+
+
 async def extract_file_metadata(session: AsyncSession, file_id: str) -> bool:
     """Returns False when the file no longer exists and the pipeline must stop."""
     file_item = await repository.get(session, file_id)
     if not file_item:
         return False
 
-    stored_path = storage.path_for(file_item.stored_name)
-    if not stored_path.exists():
+    if not await storage.exists(file_item.stored_name):
         file_item.processing_status = ProcessingStatus.FAILED
         file_item.scan_status = file_item.scan_status or ScanStatus.FAILED
         file_item.scan_details = "stored file not found during metadata extraction"
@@ -120,12 +172,11 @@ async def extract_file_metadata(session: AsyncSession, file_id: str) -> bool:
     }
 
     if file_item.mime_type.startswith("text/"):
-        content = stored_path.read_text(encoding="utf-8", errors="ignore")
-        metadata["line_count"] = len(content.splitlines())
-        metadata["char_count"] = len(content)
+        line_count, char_count = await _count_text_stats(file_item.stored_name)
+        metadata["line_count"] = line_count
+        metadata["char_count"] = char_count
     elif file_item.mime_type == "application/pdf":
-        content = stored_path.read_bytes()
-        metadata["approx_page_count"] = max(content.count(b"/Type /Page"), 1)
+        metadata["approx_page_count"] = max(await _count_pdf_pages(file_item.stored_name), 1)
 
     file_item.metadata_json = metadata
     file_item.processing_status = ProcessingStatus.PROCESSED
