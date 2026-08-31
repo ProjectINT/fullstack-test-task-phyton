@@ -28,6 +28,8 @@ export type FileItem = {
 export type AlertItem = {
   id: number;
   file_id: string;
+  /** Денормализованный title файла — таблица алертов показывает именно его. */
+  file_title: string;
   level: AlertLevel;
   message: string;
   created_at: string;
@@ -46,6 +48,12 @@ export type UploadOptions = {
   /** Переопределяет MIME — браузер такое не позволяет, а API даёт (фаза 3). */
   mimeType?: string;
 };
+
+/**
+ * Значения намеренно шире, чем `number`: контрактные тесты шлют мусор
+ * (`limit=abc`, `offset=-1`) и проверяют 422.
+ */
+export type PaginationParams = { limit?: number | string; offset?: number | string };
 
 const TERMINAL_STATUSES: ProcessingStatus[] = ["processed", "failed"];
 
@@ -123,11 +131,11 @@ export class Api {
     return (await response.json()) as FileItem;
   }
 
-  async listFilesResponse(params: { limit?: number; offset?: number } = {}): Promise<APIResponse> {
+  async listFilesResponse(params: PaginationParams = {}): Promise<APIResponse> {
     return this.request.get(this.url("/files"), { params });
   }
 
-  async listFiles(params: { limit?: number; offset?: number } = {}): Promise<FileItem[]> {
+  async listFiles(params: PaginationParams = {}): Promise<FileItem[]> {
     const response = await this.listFilesResponse(params);
     expect(response.ok(), `GET /files: ${await response.text()}`).toBeTruthy();
     return (await response.json()) as FileItem[];
@@ -178,6 +186,13 @@ export class Api {
 
   async updateFileResponse(fileId: string, title: string): Promise<APIResponse> {
     return this.request.patch(this.url(`/files/${fileId}`), { data: { title } });
+  }
+
+  /** PATCH /files/{id}, падает если не 200. */
+  async updateFile(fileId: string, title: string): Promise<FileItem> {
+    const response = await this.updateFileResponse(fileId, title);
+    expect(response.ok(), `PATCH /files/${fileId}: ${await response.text()}`).toBeTruthy();
+    return (await response.json()) as FileItem;
   }
 
   async downloadResponse(fileId: string): Promise<APIResponse> {
@@ -249,11 +264,11 @@ export class Api {
 
   // --- alerts --------------------------------------------------------------
 
-  async listAlertsResponse(params: { limit?: number; offset?: number } = {}): Promise<APIResponse> {
+  async listAlertsResponse(params: PaginationParams = {}): Promise<APIResponse> {
     return this.request.get(this.url("/alerts"), { params });
   }
 
-  async listAlerts(params: { limit?: number; offset?: number } = {}): Promise<AlertItem[]> {
+  async listAlerts(params: PaginationParams = {}): Promise<AlertItem[]> {
     const response = await this.listAlertsResponse(params);
     expect(response.ok(), `GET /alerts: ${await response.text()}`).toBeTruthy();
     return (await response.json()) as AlertItem[];

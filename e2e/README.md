@@ -53,7 +53,9 @@ e2e/
     ├── smoke-ui.spec.ts    # фаза 1: smoke UI
     ├── upload.spec.ts      # фаза 2: загрузка файла (happy path)
     ├── scan.spec.ts        # фаза 3: сценарии скана (подозрительные файлы)
-    └── negative-ui.spec.ts # фаза 4: негативные сценарии UI
+    ├── negative-ui.spec.ts # фаза 4: негативные сценарии UI
+    ├── download.spec.ts    # фаза 5: скачивание (UI + API)
+    └── api-contract.spec.ts # фаза 6: контракты API (пагинация, CRUD, алерты)
 ```
 
 ## Фикстуры Playwright
