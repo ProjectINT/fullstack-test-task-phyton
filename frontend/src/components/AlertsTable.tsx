@@ -4,7 +4,7 @@ import { Alert, Badge, Button, Card, Spinner, Table } from "react-bootstrap";
 import { useTranslations } from "@/i18n";
 import { formatDate } from "@/lib/format";
 import type { AlertItem } from "@/lib/types";
-import { AlertLevelBadge } from "./StatusBadge";
+import { StatusBadge } from "./StatusBadge";
 import { TablePagination, type PaginationControls } from "./TablePagination";
 
 type Props = {
@@ -83,7 +83,7 @@ export function AlertsTable({
                           </Button>
                         </td>
                         <td>
-                          <AlertLevelBadge level={item.level} />
+                          <StatusBadge kind="level" value={item.level} />
                         </td>
                         <td>{item.message}</td>
                         <td>{formatDate(item.created_at)}</td>

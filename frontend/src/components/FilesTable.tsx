@@ -6,7 +6,7 @@ import { useTranslations } from "@/i18n";
 import { fileDownloadUrl } from "@/lib/api";
 import { formatDate, formatSize } from "@/lib/format";
 import type { FileItem } from "@/lib/types";
-import { ProcessingStatusBadge, ScanStatusBadge } from "./StatusBadge";
+import { StatusBadge } from "./StatusBadge";
 import { TablePagination, type PaginationControls } from "./TablePagination";
 
 type Props = {
@@ -92,12 +92,13 @@ export function FilesTable({
                         <td>{file.mime_type}</td>
                         <td>{formatSize(file.size)}</td>
                         <td>
-                          <ProcessingStatusBadge status={file.processing_status} />
+                          <StatusBadge kind="processing" value={file.processing_status} />
                         </td>
                         <td>
-                          <ScanStatusBadge
-                            status={file.scan_status}
-                            details={file.scan_details}
+                          <StatusBadge
+                            kind="scan"
+                            value={file.scan_status}
+                            title={file.scan_details}
                           />
                         </td>
                         <td>{formatDate(file.created_at)}</td>
