@@ -21,8 +21,8 @@ SUSPICIOUS_SIZE_BYTES = 10 * 1024 * 1024
 PDF_PAGE_MARKER = b"/Type /Page"
 
 
-async def list_files(session: AsyncSession) -> list[StoredFile]:
-    return await repository.list_files(session)
+async def list_files(session: AsyncSession, limit: int, offset: int) -> list[StoredFile]:
+    return await repository.list_files(session, limit=limit, offset=offset)
 
 
 async def get_file(session: AsyncSession, file_id: str) -> StoredFile:
@@ -32,8 +32,10 @@ async def get_file(session: AsyncSession, file_id: str) -> StoredFile:
     return file_item
 
 
-async def resolve_path(file_item: StoredFile) -> Path:
-    return await storage.resolve(file_item.stored_name)
+async def get_file_for_download(session: AsyncSession, file_id: str) -> tuple[StoredFile, Path]:
+    file_item = await get_file(session, file_id)
+    stored_path = await storage.resolve(file_item.stored_name)
+    return file_item, stored_path
 
 
 async def _read_upload_chunks(upload_file: UploadFile) -> AsyncIterator[bytes]:

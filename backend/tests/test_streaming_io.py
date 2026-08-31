@@ -82,7 +82,7 @@ async def test_upload_over_limit_does_not_create_db_record(session, storage_dir,
     with pytest.raises(FileTooLarge):
         await service.create_file(session, title="big", upload_file=upload)
 
-    assert await repository.list_files(session) == []
+    assert await repository.list_files(session, limit=100, offset=0) == []
     assert list(storage_dir.iterdir()) == []
 
 

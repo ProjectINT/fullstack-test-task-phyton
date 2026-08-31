@@ -3,8 +3,8 @@ from datetime import datetime
 from sqlalchemy import BigInteger, Boolean, DateTime, JSON, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.core.db import Base
-from src.files.enums import ProcessingStatus
+from src.core.db import Base, status_column
+from src.files.enums import ProcessingStatus, ScanStatus
 
 
 class StoredFile(Base):
@@ -16,10 +16,10 @@ class StoredFile(Base):
     stored_name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     mime_type: Mapped[str] = mapped_column(String(255), nullable=False)
     size: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    processing_status: Mapped[str] = mapped_column(
-        String(50), nullable=False, default=ProcessingStatus.UPLOADED
+    processing_status: Mapped[ProcessingStatus] = mapped_column(
+        status_column(ProcessingStatus), nullable=False, default=ProcessingStatus.UPLOADED
     )
-    scan_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    scan_status: Mapped[ScanStatus | None] = mapped_column(status_column(ScanStatus), nullable=True)
     scan_details: Mapped[str | None] = mapped_column(String(500), nullable=True)
     metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     requires_attention: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

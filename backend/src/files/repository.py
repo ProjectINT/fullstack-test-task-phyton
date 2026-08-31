@@ -4,8 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.files.models import StoredFile
 
 
-async def list_files(session: AsyncSession) -> list[StoredFile]:
-    result = await session.execute(select(StoredFile).order_by(StoredFile.created_at.desc()))
+async def list_files(session: AsyncSession, limit: int, offset: int) -> list[StoredFile]:
+    result = await session.execute(
+        select(StoredFile).order_by(StoredFile.created_at.desc()).limit(limit).offset(offset)
+    )
     return list(result.scalars().all())
 
 

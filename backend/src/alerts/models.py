@@ -3,7 +3,8 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.core.db import Base
+from src.alerts.enums import AlertLevel
+from src.core.db import Base, status_column
 
 
 class Alert(Base):
@@ -16,7 +17,7 @@ class Alert(Base):
         nullable=False,
         index=True,
     )
-    level: Mapped[str] = mapped_column(String(50), nullable=False)
+    level: Mapped[AlertLevel] = mapped_column(status_column(AlertLevel), nullable=False)
     message: Mapped[str] = mapped_column(String(500), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

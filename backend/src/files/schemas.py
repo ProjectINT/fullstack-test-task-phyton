@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from src.files.enums import ProcessingStatus, ScanStatus
+
 
 class FileItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -11,8 +13,8 @@ class FileItem(BaseModel):
     original_name: str
     mime_type: str
     size: int
-    processing_status: str
-    scan_status: str | None
+    processing_status: ProcessingStatus
+    scan_status: ScanStatus | None
     scan_details: str | None
     metadata_json: dict | None
     requires_attention: bool

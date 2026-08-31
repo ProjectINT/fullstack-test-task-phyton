@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.db import get_session
+from src.core.pagination import PaginationDep
 from src.files import service
 from src.files.schemas import FileItem, FileUpdate
 from src.worker.tasks import scan_file_for_threats
@@ -15,8 +16,8 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
 @router.get("", response_model=list[FileItem])
-async def list_files_view(session: SessionDep):
-    return await service.list_files(session)
+async def list_files_view(session: SessionDep, pagination: PaginationDep):
+    return await service.list_files(session, limit=pagination.limit, offset=pagination.offset)
 
 
 @router.post("", response_model=FileItem, status_code=201)
@@ -42,8 +43,7 @@ async def update_file_view(file_id: str, payload: FileUpdate, session: SessionDe
 
 @router.get("/{file_id}/download")
 async def download_file_view(file_id: str, session: SessionDep):
-    file_item = await service.get_file(session, file_id)
-    stored_path = await service.resolve_path(file_item)
+    file_item, stored_path = await service.get_file_for_download(session, file_id)
     return FileResponse(
         path=stored_path,
         media_type=file_item.mime_type,
