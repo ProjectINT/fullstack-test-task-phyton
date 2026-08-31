@@ -96,7 +96,10 @@ async def scan_file_for_threats(session: AsyncSession, file_id: str) -> bool:
     if not file_item:
         return False
 
+    # B8: промежуточный статус коммитим отдельно, чтобы он был виден до окончания скана
     file_item.processing_status = ProcessingStatus.PROCESSING
+    await session.commit()
+
     reasons: list[str] = []
     extension = Path(file_item.original_name).suffix.lower()
 
@@ -182,6 +185,20 @@ async def extract_file_metadata(session: AsyncSession, file_id: str) -> bool:
     file_item.processing_status = ProcessingStatus.PROCESSED
     await session.commit()
     return True
+
+
+async def mark_file_failed(session: AsyncSession, file_id: str, reason: str) -> None:
+    file_item = await repository.get(session, file_id)
+    if not file_item:
+        return
+
+    file_item.processing_status = ProcessingStatus.FAILED
+    if not file_item.scan_status:
+        file_item.scan_status = ScanStatus.FAILED
+    file_item.scan_details = reason[:500]
+    alert = Alert(file_id=file_id, level=AlertLevel.CRITICAL, message=f"File processing failed: {reason}"[:500])
+    alerts_repository.add(session, alert)
+    await session.commit()
 
 
 async def send_file_alert(session: AsyncSession, file_id: str) -> None:

@@ -2,14 +2,16 @@ import asyncio
 from uuid import uuid4
 
 from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 import pytest
 
+from src.alerts.enums import AlertLevel
 from src.alerts.models import Alert
 from src.core import db
 from src.core.config import settings
-from src.files.enums import ProcessingStatus
+from src.files import service as files_service
+from src.files.enums import ProcessingStatus, ScanStatus
 from src.files.models import StoredFile
 from src.worker import tasks
 
@@ -114,3 +116,80 @@ def test_worker_session_uses_fresh_disposable_engine(worker_db, monkeypatch):
     assert disposed == created, "engine должен освобождаться до закрытия loop"
     for engine in created:
         assert isinstance(engine.sync_engine.pool, NullPool)
+
+
+def load_file_and_alerts(file_id: str) -> tuple[StoredFile | None, list[Alert]]:
+    async def load():
+        async with db.worker_session() as session:
+            file_item = await session.get(StoredFile, file_id)
+            alerts = (await session.execute(select(Alert).where(Alert.file_id == file_id))).scalars().all()
+            return file_item, list(alerts)
+
+    return asyncio.run(load())
+
+
+def test_processing_status_committed_before_scan_result(worker_db, storage_dir, monkeypatch):
+    """Регрессия B8: статус processing коммитится отдельной транзакцией до результата
+    скана, поэтому виден другим соединениям, пока скан ещё идёт."""
+    file_id = seed_file(storage_dir)
+
+    committed: list[tuple[str | None, str | None]] = []
+    real_commit = AsyncSession.commit
+
+    async def commit_and_read_from_outside(self):
+        await real_commit(self)
+        engine = create_async_engine(worker_db, poolclass=NullPool)
+        async with engine.connect() as conn:
+            result = await conn.execute(
+                select(StoredFile.processing_status, StoredFile.scan_status).where(StoredFile.id == file_id)
+            )
+            committed.append(tuple(result.one()))
+        await engine.dispose()
+
+    monkeypatch.setattr(AsyncSession, "commit", commit_and_read_from_outside)
+
+    async def run_scan():
+        async with db.worker_session() as session:
+            await files_service.scan_file_for_threats(session, file_id)
+
+    asyncio.run(run_scan())
+
+    assert committed == [
+        (ProcessingStatus.PROCESSING, None),
+        (ProcessingStatus.PROCESSING, ScanStatus.CLEAN),
+    ]
+
+
+def test_pipeline_tasks_have_retry_config():
+    """B9: у всех задач конвейера настроены авторетраи с ограничением попыток."""
+    for task in (tasks.scan_file_for_threats, tasks.extract_file_metadata, tasks.send_file_alert):
+        assert task.autoretry_for == (Exception,)
+        assert task.max_retries == 3
+        assert task.retry_backoff is True
+
+
+def test_final_failure_marks_file_failed_and_creates_critical_alert(worker_db, storage_dir):
+    """B9: после исчерпания ретраев on_failure переводит файл в failed и создаёт
+    critical-алерт — файл не остаётся навсегда в processing."""
+    file_id = seed_file(storage_dir)
+
+    tasks.extract_file_metadata.on_failure(RuntimeError("boom"), "task-id", (file_id,), {}, None)
+
+    file_item, alerts = load_file_and_alerts(file_id)
+    assert file_item.processing_status == ProcessingStatus.FAILED
+    assert file_item.scan_status == ScanStatus.FAILED
+    assert "boom" in file_item.scan_details
+    assert len(alerts) == 1
+    assert alerts[0].level == AlertLevel.CRITICAL
+    assert "boom" in alerts[0].message
+
+
+def test_final_failure_for_missing_file_is_noop(worker_db):
+    """on_failure не падает и ничего не создаёт, если файл уже удалён."""
+    missing_id = str(uuid4())
+
+    tasks.scan_file_for_threats.on_failure(RuntimeError("boom"), "task-id", (missing_id,), {}, None)
+
+    file_item, alerts = load_file_and_alerts(missing_id)
+    assert file_item is None
+    assert alerts == []
