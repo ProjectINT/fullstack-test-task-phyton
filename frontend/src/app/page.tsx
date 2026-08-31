@@ -15,6 +15,8 @@ import {
   Table,
 } from "react-bootstrap";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
 type FileItem = {
   id: string;
   title: string;
@@ -70,6 +72,18 @@ function getLevelVariant(level: string) {
   return "success";
 }
 
+function getScanVariant(scanStatus: string | null) {
+  if (scanStatus === "clean") {
+    return "success";
+  }
+
+  if (scanStatus === "suspicious" || scanStatus === "failed") {
+    return "danger";
+  }
+
+  return "secondary";
+}
+
 function getProcessingVariant(status: string) {
   if (status === "failed") {
     return "danger";
@@ -94,16 +108,24 @@ export default function Page() {
   const [showModal, setShowModal] = useState(false);
   const [title, setTitle] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  function closeModal() {
+    setShowModal(false);
+    setTitle("");
+    setSelectedFile(null);
+    setFormError(null);
+  }
 
   async function loadData() {
     setIsLoading(true);
-    setErrorMessage(null);
+    setPageError(null);
 
     try {
       const [filesResponse, alertsResponse] = await Promise.all([
-        fetch(`http://localhost:8000/files`, { cache: "no-store" }),
-        fetch(`http://localhost:8000/alerts`, { cache: "no-store" }),
+        fetch(`${API_URL}/files`, { cache: "no-store" }),
+        fetch(`${API_URL}/alerts`, { cache: "no-store" }),
       ]);
 
       if (!filesResponse.ok || !alertsResponse.ok) {
@@ -118,7 +140,7 @@ export default function Page() {
       setFiles(filesData);
       setAlerts(alertsData);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Произошла ошибка");
+      setPageError(error instanceof Error ? error.message : "Произошла ошибка");
     } finally {
       setIsLoading(false);
     }
@@ -132,33 +154,37 @@ export default function Page() {
     event.preventDefault();
 
     if (!title.trim() || !selectedFile) {
-      setErrorMessage("Укажите название и выберите файл");
+      setFormError("Укажите название и выберите файл");
       return;
     }
 
     setIsSubmitting(true);
-    setErrorMessage(null);
+    setFormError(null);
 
     const formData = new FormData();
     formData.append("title", title.trim());
     formData.append("file", selectedFile);
 
     try {
-      const response = await fetch(`http://localhost:8000/files`, {
+      const response = await fetch(`${API_URL}/files`, {
         method: "POST",
         body: formData,
       });
 
       if (!response.ok) {
-        throw new Error("Не удалось загрузить файл");
+        const detail = await response
+          .json()
+          .then((data: { detail?: unknown }) =>
+            typeof data.detail === "string" ? data.detail : null
+          )
+          .catch(() => null);
+        throw new Error(detail ?? "Не удалось загрузить файл");
       }
 
-      setShowModal(false);
-      setTitle("");
-      setSelectedFile(null);
+      closeModal();
       await loadData();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Произошла ошибка");
+      setFormError(error instanceof Error ? error.message : "Произошла ошибка");
     } finally {
       setIsSubmitting(false);
     }
@@ -189,9 +215,9 @@ export default function Page() {
             </Card.Body>
           </Card>
 
-          {errorMessage ? (
+          {pageError ? (
             <Alert variant="danger" className="shadow-sm">
-              {errorMessage}
+              {pageError}
             </Alert>
           ) : null}
 
@@ -246,7 +272,7 @@ export default function Page() {
                             </td>
                             <td>
                               <div className="d-flex flex-column gap-1">
-                                <Badge bg={file.requires_attention ? "warning" : "success"}>
+                                <Badge bg={getScanVariant(file.scan_status)}>
                                   {file.scan_status ?? "pending"}
                                 </Badge>
                                 <span className="small text-secondary">
@@ -258,7 +284,7 @@ export default function Page() {
                             <td className="text-nowrap">
                               <Button
                                 as="a"
-                                href={`http://localhost:8000/files/${file.id}/download`}
+                                href={`${API_URL}/files/${file.id}/download`}
                                 variant="outline-primary"
                                 size="sm"
                               >
@@ -328,12 +354,13 @@ export default function Page() {
         </Col>
       </Row>
 
-      <Modal show={showModal} onHide={() => setShowModal(false)} centered>
+      <Modal show={showModal} onHide={closeModal} centered>
         <Form onSubmit={handleSubmit}>
           <Modal.Header closeButton>
             <Modal.Title>Добавить файл</Modal.Title>
           </Modal.Header>
           <Modal.Body>
+            {formError ? <Alert variant="danger">{formError}</Alert> : null}
             <Form.Group className="mb-3">
               <Form.Label>Название</Form.Label>
               <Form.Control
@@ -353,7 +380,7 @@ export default function Page() {
             </Form.Group>
           </Modal.Body>
           <Modal.Footer>
-            <Button variant="outline-secondary" onClick={() => setShowModal(false)}>
+            <Button variant="outline-secondary" onClick={closeModal}>
               Отмена
             </Button>
             <Button type="submit" variant="primary" disabled={isSubmitting}>
