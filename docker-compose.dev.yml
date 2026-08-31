@@ -38,6 +38,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # URL, по которому браузер пользователя ходит в API (не внутрисетевой хост)
+        NEXT_PUBLIC_API_URL: http://localhost:8000
     container_name: frontend
     ports:
       - "3000:3000"
