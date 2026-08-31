@@ -1,28 +1,11 @@
-// Соответствуют enum'ам бэкенда: src/files/enums.py, src/alerts/enums.py
-export type ProcessingStatus = "uploaded" | "processing" | "processed" | "failed";
-export type ScanStatus = "clean" | "suspicious" | "failed";
-export type AlertLevel = "info" | "warning" | "critical";
-
-export type FileItem = {
-  id: string;
-  title: string;
-  original_name: string;
-  mime_type: string;
-  size: number;
-  processing_status: ProcessingStatus;
-  scan_status: ScanStatus | null;
-  scan_details: string | null;
-  metadata_json: Record<string, unknown> | null;
-  requires_attention: boolean;
-  created_at: string;
-  updated_at: string;
-};
-
-export type AlertItem = {
-  id: number;
-  file_id: string;
-  file_title: string;
-  level: AlertLevel;
-  message: string;
-  created_at: string;
-};
+// Единственный источник правды — контракт бэкенда: src/api/schema.d.ts
+// пересобирается из backend/openapi.json командой `npm run gen:api`
+// (CI проверяет дрифт через `npm run gen:api:check`).
+export type {
+  AlertItem,
+  AlertLevel,
+  FileItem,
+  FileUpdate,
+  ProcessingStatus,
+  ScanStatus,
+} from "@/api/types";

@@ -13,7 +13,7 @@ type Props = {
   onRenamed: () => void;
 };
 
-export function RenameModal({ file, onClose, onRenamed }: Props) {
+export const RenameModal = ({ file, onClose, onRenamed }: Props) => {
   const t = useTranslations("renameModal");
   const tCommon = useTranslations("common");
   // null — пользователь ещё не редактировал поле, показываем текущее название файла.
@@ -23,13 +23,13 @@ export function RenameModal({ file, onClose, onRenamed }: Props) {
 
   const displayedTitle = title ?? file?.title ?? "";
 
-  function handleClose() {
+  const handleClose = () => {
     setTitle(null);
     setFormError(null);
     onClose();
-  }
+  };
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!file) return;
 
@@ -51,7 +51,7 @@ export function RenameModal({ file, onClose, onRenamed }: Props) {
     } finally {
       setIsSubmitting(false);
     }
-  }
+  };
 
   return (
     <Modal show={file !== null} onHide={handleClose} centered>
@@ -81,4 +81,4 @@ export function RenameModal({ file, onClose, onRenamed }: Props) {
       </Form>
     </Modal>
   );
-}
+};

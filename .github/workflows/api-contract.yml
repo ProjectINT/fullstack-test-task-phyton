@@ -1,0 +1,33 @@
+name: API contract
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Regenerate contract and fail on drift
+        working-directory: frontend
+        run: npm run gen:api:check
+
+      - name: Typecheck frontend
+        working-directory: frontend
+        run: npm run typecheck

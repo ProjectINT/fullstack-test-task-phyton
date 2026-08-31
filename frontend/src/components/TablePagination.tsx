@@ -11,7 +11,7 @@ export type PaginationControls = {
   onNext: () => void;
 };
 
-export function TablePagination({ page, hasPrev, hasNext, onPrev, onNext }: PaginationControls) {
+export const TablePagination = ({ page, hasPrev, hasNext, onPrev, onNext }: PaginationControls) => {
   const t = useTranslations("pagination");
 
   // Единственная страница — кнопки не нужны.
@@ -28,4 +28,4 @@ export function TablePagination({ page, hasPrev, hasNext, onPrev, onNext }: Pagi
       </Button>
     </div>
   );
-}
+};
