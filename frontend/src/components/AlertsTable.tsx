@@ -31,7 +31,7 @@ export function AlertsTable({
         <div className="d-flex justify-content-between align-items-center">
           <h2 className="h5 mb-0">{t("title")}</h2>
           <div className="d-flex align-items-center gap-2">
-            {isRefreshing ? <Spinner animation="border" size="sm" /> : null}
+            {isRefreshing ? <Spinner animation="border" size="sm" role="status" /> : null}
             <Badge bg="secondary">{alerts.length}</Badge>
           </div>
         </div>

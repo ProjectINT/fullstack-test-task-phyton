@@ -6,9 +6,9 @@ export const E2E_ROOT = path.resolve(__dirname, "..");
 /** Каталог для сгенерированных фикстур-файлов (в git не хранятся). */
 export const FIXTURES_DIR = path.join(E2E_ROOT, ".tmp", "fixtures");
 
-/** Фронтенд поднят с `basePath: '/test'` (frontend/next.config.ts). */
+/** Приложение живёт в корне (basePath из frontend/next.config.ts убран). */
 export const FRONTEND_URL = process.env.E2E_FRONTEND_URL ?? "http://localhost:3000";
-export const APP_PATH = process.env.E2E_APP_PATH ?? "/test";
+export const APP_PATH = process.env.E2E_APP_PATH ?? "/";
 export const APP_URL = `${FRONTEND_URL}${APP_PATH}`;
 
 export const API_URL = process.env.E2E_API_URL ?? "http://localhost:8000";

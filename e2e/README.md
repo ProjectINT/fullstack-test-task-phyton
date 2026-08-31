@@ -16,10 +16,6 @@ npm install
 npm run install:browsers
 ```
 
-> Контейнер `frontend` сейчас не собирается: `frontend/Dockerfile` копирует
-> отсутствующий `.env.production`. Пока это не починено, фронт поднимается
-> локально: `cd frontend && npm run dev` (слушает `http://localhost:3000`).
-
 ## Запуск
 
 ```bash
@@ -34,7 +30,7 @@ npm run report           # HTML-отчёт последнего прогона
 | Переменная | По умолчанию | Назначение |
 |---|---|---|
 | `E2E_FRONTEND_URL` | `http://localhost:3000` | origin фронтенда |
-| `E2E_APP_PATH` | `/test` | `basePath` из `frontend/next.config.ts` |
+| `E2E_APP_PATH` | `/` | путь до приложения (если появится `basePath`) |
 | `E2E_API_URL` | `http://localhost:8000` | бэкенд FastAPI |
 | `E2E_PROCESSING_TIMEOUT_MS` | `30000` | ожидание Celery-воркера |
 | `E2E_STACK_READY_TIMEOUT_MS` | `60000` | ожидание готовности стека в globalSetup |
@@ -49,9 +45,12 @@ e2e/
 │   ├── config.ts          # URL'ы, таймауты, префикс тестовых title
 │   ├── test-files.ts      # фикстуры-файлы, генерируются на лету (в git не лежат)
 │   ├── api.ts             # клиент бэкенда поверх request-контекста Playwright
-│   └── fixtures.ts        # test.extend: api, uploadFile, uploadedFile, appPage
+│   ├── fixtures.ts        # test.extend: api, uploadFile, uploadedFile, appPage, dashboard
+│   └── pages/
+│       └── dashboard.ts   # page object главной страницы (секции, счётчики, спиннеры)
 └── tests/
-    └── smoke.spec.ts      # фаза 0: инфраструктура жива
+    ├── smoke.spec.ts      # фаза 0: инфраструктура жива
+    └── smoke-ui.spec.ts   # фаза 1: smoke UI
 ```
 
 ## Фикстуры Playwright
@@ -60,7 +59,10 @@ e2e/
 - `uploadFile(options)` — загружает файл через API и регистрирует авто-очистку.
   `{ fixture: 'malware', waitForProcessing: true }` — самый частый вызов.
 - `uploadedFile` — готовый `clean.txt` в статусе `processed`.
-- `appPage` — открытая страница приложения (учитывает `basePath: /test`).
+- `appPage` — открытая страница приложения (сырой `Page`).
+- `dashboard` — та же страница как page object `DashboardPage`: секции
+  `files`/`alerts` со счётчиком, спиннером и таблицей, плюс `refresh()`,
+  `mockLists()` и `delayLists()` для перехвата клиентских запросов.
 
 ## Изоляция
 

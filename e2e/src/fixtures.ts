@@ -1,7 +1,8 @@
 import { Page, TestInfo, test as base, expect } from "@playwright/test";
 
 import { Api, FileItem, UploadOptions } from "./api";
-import { APP_PATH, TITLE_PREFIX } from "./config";
+import { TITLE_PREFIX } from "./config";
+import { DashboardPage } from "./pages/dashboard";
 import { TestFile, TestFileKey, testFile } from "./test-files";
 
 /**
@@ -35,6 +36,8 @@ type Fixtures = {
   uploadedFile: FileItem;
   /** Открытая и прогруженная страница приложения. */
   appPage: Page;
+  /** Page object главной страницы, уже открытой в браузере. */
+  dashboard: DashboardPage;
 };
 
 export const test = base.extend<Fixtures>({
@@ -69,13 +72,19 @@ export const test = base.extend<Fixtures>({
     await gotoApp(page);
     await use(page);
   },
+
+  dashboard: async ({ page }, use) => {
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
+    await use(dashboard);
+  },
 });
 
-/** Переход на приложение: оно живёт под `basePath: '/test'`, а не в корне. */
-export async function gotoApp(page: Page): Promise<void> {
-  await page.goto(APP_PATH, { waitUntil: "domcontentloaded" });
-  // Спиннер держится до конца первой загрузки данных.
-  await expect(page.getByRole("heading", { name: "Управление файлами" })).toBeVisible();
+/** Переход на приложение с ожиданием первой отрисовки. */
+export async function gotoApp(page: Page): Promise<DashboardPage> {
+  const dashboard = new DashboardPage(page);
+  await dashboard.goto();
+  return dashboard;
 }
 
-export { expect };
+export { DashboardPage, expect };
