@@ -209,6 +209,10 @@ async def process_file(session: AsyncSession, file_id: str) -> None:
     file_item = await repository.get(session, file_id)
     if not file_item:
         return
+    if file_item.processing_status == ProcessingStatus.PROCESSED:
+        # ретрай после успешного финального коммита (например, потерян ack брокера):
+        # результат и алерт уже записаны той же транзакцией — повтор создал бы дубликат алерта
+        return
 
     # B8: промежуточный статус коммитим отдельно, чтобы он был виден до окончания обработки
     file_item.processing_status = ProcessingStatus.PROCESSING

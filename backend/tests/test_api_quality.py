@@ -46,6 +46,14 @@ async def test_files_pagination_limit_offset(client, session):
     assert [item["id"] for item in response.json()] == [files[3].id, files[2].id]
 
 
+async def test_files_listed_newest_first(client, session):
+    files = await seed_files(session, 3)
+
+    response = await client.get("/files")
+
+    assert [item["id"] for item in response.json()] == [files[2].id, files[1].id, files[0].id]
+
+
 async def test_files_pagination_defaults_return_everything_small(client, session):
     await seed_files(session, 3)
 
