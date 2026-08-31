@@ -67,9 +67,10 @@ async def update_file(session: AsyncSession, file_id: str, title: str) -> Stored
 
 async def delete_file(session: AsyncSession, file_id: str) -> None:
     file_item = await get_file(session, file_id)
-    storage.delete(file_item.stored_name)
+    stored_name = file_item.stored_name
     await repository.delete(session, file_item)
     await session.commit()
+    storage.delete(stored_name)
 
 
 async def scan_file_for_threats(session: AsyncSession, file_id: str) -> bool:
