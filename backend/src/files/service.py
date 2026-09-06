@@ -1,4 +1,5 @@
 import codecs
+import logging
 import mimetypes
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack
@@ -16,6 +17,8 @@ from src.core.exceptions import EmptyFile, FileNotFound, FileTooLarge
 from src.files import repository, storage
 from src.files.enums import ProcessingStatus, ScanStatus
 from src.files.models import StoredFile
+
+logger = logging.getLogger(__name__)
 
 SUSPICIOUS_EXTENSIONS = {".exe", ".bat", ".cmd", ".sh", ".js"}
 SUSPICIOUS_SIZE_BYTES = 10 * 1024 * 1024
@@ -157,9 +160,25 @@ async def update_file(session: AsyncSession, file_id: str, title: str) -> Stored
 async def delete_file(session: AsyncSession, file_id: str) -> None:
     file_item = await get_file(session, file_id)
     stored_name = file_item.stored_name
-    await repository.delete(session, file_item)
-    await session.commit()
-    await storage.delete(stored_name)
+    # Зеркально create_file: физическое удаление необратимо, поэтому до commit файл
+    # лишь переименовывается в *.deleting (обратимо), а откатом служит rename назад.
+    trashed_name: str | None = None
+    async with AsyncExitStack() as undo:
+        # файл мог пропасть раньше (process_file помечает такие записи FAILED) —
+        # запись всё равно должна удаляться
+        if await storage.exists(stored_name):
+            trashed_name = await storage.trash(stored_name)
+            undo.push_async_callback(storage.restore, trashed_name, stored_name)
+        await repository.delete(session, file_item)
+        await session.commit()
+        undo.pop_all()
+    if trashed_name is None:
+        return
+    try:
+        await storage.delete(trashed_name)
+    except OSError:
+        # запись уже удалена; остаток помечен суффиксом и не спутается с живыми файлами
+        logger.exception("failed to remove trashed file %s", trashed_name)
 
 
 def _scan_for_threats(file_item: StoredFile) -> None:

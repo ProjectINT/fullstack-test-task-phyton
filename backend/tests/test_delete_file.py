@@ -54,3 +54,49 @@ async def test_delete_keeps_stored_file_when_commit_fails(client, session, stora
 
     assert list(storage_dir.iterdir()) == stored_files, "stored file must survive a failed commit"
     assert await repository.get(session, file_id) is not None, "db record must survive a failed commit"
+
+
+async def test_delete_restores_file_when_commit_fails(client, session, storage_dir, monkeypatch):
+    uploaded = await upload_sample(client)
+    stored_name = (await repository.get(session, uploaded["id"])).stored_name
+
+    async def failing_commit() -> None:
+        raise RuntimeError("db is down")
+
+    monkeypatch.setattr(session, "commit", failing_commit)
+
+    with pytest.raises(RuntimeError, match="db is down"):
+        await service.delete_file(session, uploaded["id"])
+
+    # файл вернулся под исходным именем, временного *.deleting не осталось
+    assert sorted(p.name for p in storage_dir.iterdir()) == [stored_name]
+    await session.rollback()
+    assert await repository.get(session, uploaded["id"]) is not None
+
+
+async def test_delete_succeeds_when_final_storage_removal_fails(client, session, storage_dir, monkeypatch):
+    from src.files import storage
+
+    uploaded = await upload_sample(client)
+    stored_name = (await repository.get(session, uploaded["id"])).stored_name
+
+    async def failing_delete(name: str) -> None:
+        raise OSError("disk error")
+
+    monkeypatch.setattr(storage, "delete", failing_delete)
+
+    await service.delete_file(session, uploaded["id"])
+
+    # запись удалена, остаток помечен суффиксом и отличим от живых файлов
+    assert await repository.get(session, uploaded["id"]) is None
+    assert [p.name for p in storage_dir.iterdir()] == [stored_name + storage.TRASH_SUFFIX]
+
+
+async def test_delete_record_whose_stored_file_is_already_missing(client, session, storage_dir):
+    uploaded = await upload_sample(client)
+    stored_name = (await repository.get(session, uploaded["id"])).stored_name
+    (storage_dir / stored_name).unlink()
+
+    await service.delete_file(session, uploaded["id"])
+
+    assert await repository.get(session, uploaded["id"]) is None

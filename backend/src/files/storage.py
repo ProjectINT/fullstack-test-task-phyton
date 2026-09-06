@@ -8,6 +8,7 @@ from src.core.config import settings
 from src.core.exceptions import StoredFileNotFound
 
 CHUNK_SIZE = 1024 * 1024
+TRASH_SUFFIX = ".deleting"
 
 settings.storage_dir.mkdir(parents=True, exist_ok=True)
 
@@ -47,3 +48,14 @@ async def delete(stored_name: str) -> None:
     path = path_for(stored_name)
     if await aiofiles.os.path.exists(path):
         await aiofiles.os.remove(path)
+
+
+async def trash(stored_name: str) -> str:
+    """Помечает файл к удалению: атомарный rename в *.deleting. Обратим через restore."""
+    trashed_name = stored_name + TRASH_SUFFIX
+    await aiofiles.os.rename(path_for(stored_name), path_for(trashed_name))
+    return trashed_name
+
+
+async def restore(trashed_name: str, stored_name: str) -> None:
+    await aiofiles.os.rename(path_for(trashed_name), path_for(stored_name))
