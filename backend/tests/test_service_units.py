@@ -58,6 +58,29 @@ async def test_upload_without_content_type_guesses_mime_from_extension(session, 
     assert file_item.metadata_json["char_count"] == 5
 
 
+async def test_upload_removes_stored_file_when_commit_fails(session, storage_dir, monkeypatch):
+    upload = FakeUpload("notes.txt", b"hello", content_type=None)
+
+    async def failing_commit() -> None:
+        raise RuntimeError("db is down")
+
+    monkeypatch.setattr(session, "commit", failing_commit)
+
+    with pytest.raises(RuntimeError, match="db is down"):
+        await service.create_file(session, title="notes", upload_file=upload)
+
+    # без компенсации на диске остался бы файл-сирота без записи в БД
+    assert list(storage_dir.iterdir()) == []
+
+
+async def test_upload_keeps_stored_file_after_successful_commit(session, storage_dir):
+    upload = FakeUpload("notes.txt", b"hello", content_type=None)
+
+    file_item = await service.create_file(session, title="notes", upload_file=upload)
+
+    assert (storage_dir / file_item.stored_name).read_bytes() == b"hello"
+
+
 async def test_upload_with_unknown_extension_falls_back_to_octet_stream(session, storage_dir):
     upload = FakeUpload("data.unknownext", b"payload", content_type=None)
 

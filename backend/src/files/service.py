@@ -1,6 +1,7 @@
 import codecs
 import mimetypes
 from collections.abc import AsyncIterator
+from contextlib import AsyncExitStack
 from pathlib import Path
 from uuid import uuid4
 
@@ -121,27 +122,28 @@ async def create_file(session: AsyncSession, title: str, upload_file: UploadFile
     # Метаданные контента считаются в том же потоковом проходе, что и запись на диск, —
     # воркеру не приходится перечитывать файл.
     analyzer = _content_analyzer_for(mime_type)
-    try:
+    # Файл на диске и запись в БД должны появиться вместе. Откат БД делает
+    # get_session при закрытии сессии, а откат файла регистрируем здесь: если
+    # что-то упадёт до pop_all (в т.ч. сам commit), файл будет удалён.
+    async with AsyncExitStack() as undo:
+        undo.push_async_callback(storage.delete, stored_name)
         size = await storage.save(stored_name, _read_upload_chunks(upload_file, analyzer))
-    except FileTooLarge:
-        await storage.delete(stored_name)
-        raise
-    if size == 0:
-        await storage.delete(stored_name)
-        raise EmptyFile
+        if size == 0:
+            raise EmptyFile
 
-    file_item = StoredFile(
-        id=file_id,
-        title=title,
-        original_name=upload_file.filename or stored_name,
-        stored_name=stored_name,
-        mime_type=mime_type,
-        size=size,
-        processing_status=ProcessingStatus.UPLOADED,
-    )
-    file_item.metadata_json = _build_metadata(file_item, analyzer.finalize() if analyzer else {})
-    repository.add(session, file_item)
-    await session.commit()
+        file_item = StoredFile(
+            id=file_id,
+            title=title,
+            original_name=upload_file.filename or stored_name,
+            stored_name=stored_name,
+            mime_type=mime_type,
+            size=size,
+            processing_status=ProcessingStatus.UPLOADED,
+        )
+        file_item.metadata_json = _build_metadata(file_item, analyzer.finalize() if analyzer else {})
+        repository.add(session, file_item)
+        await session.commit()
+        undo.pop_all()
     return file_item
 
 
