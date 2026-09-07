@@ -1,16 +1,17 @@
 import asyncio
 from uuid import uuid4
 
+import pytest
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
-import pytest
 
 from src.alerts.enums import AlertLevel
 from src.alerts.models import Alert
 from src.core import db
 from src.core.config import settings
-from src.files import repository, service as files_service
+from src.files import repository
+from src.files import service as files_service
 from src.files.enums import ProcessingStatus, ScanStatus
 from src.files.models import StoredFile
 from src.worker import tasks
@@ -61,7 +62,11 @@ def load_file_and_alerts(file_id: str) -> tuple[StoredFile | None, list[Alert]]:
     async def load():
         async with db.worker_session() as session:
             file_item = await session.get(StoredFile, file_id)
-            alerts = (await session.execute(select(Alert).where(Alert.file_id == file_id))).scalars().all()
+            alerts = (
+                (await session.execute(select(Alert).where(Alert.file_id == file_id)))
+                .scalars()
+                .all()
+            )
             return file_item, list(alerts)
 
     return asyncio.run(load())
@@ -163,7 +168,9 @@ def test_processing_status_committed_before_scan_result(worker_db, storage_dir, 
         engine = create_async_engine(worker_db, poolclass=NullPool)
         async with engine.connect() as conn:
             result = await conn.execute(
-                select(StoredFile.processing_status, StoredFile.scan_status).where(StoredFile.id == file_id)
+                select(StoredFile.processing_status, StoredFile.scan_status).where(
+                    StoredFile.id == file_id
+                )
             )
             committed.append(tuple(result.one()))
         await engine.dispose()

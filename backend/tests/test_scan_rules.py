@@ -10,7 +10,9 @@ from src.files.models import StoredFile
 from src.files.service import SUSPICIOUS_SIZE_BYTES, _build_alert, _scan_for_threats
 
 
-def make_file(original_name: str = "report.txt", size: int = 100, mime_type: str = "text/plain") -> StoredFile:
+def make_file(
+    original_name: str = "report.txt", size: int = 100, mime_type: str = "text/plain"
+) -> StoredFile:
     return StoredFile(
         id=str(uuid4()),
         title="sample",

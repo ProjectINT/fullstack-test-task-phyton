@@ -36,7 +36,9 @@ async def test_delete_file_with_alerts_cascades(client, session, storage_dir):
     assert list(storage_dir.iterdir()) == [], "stored file must be removed from disk"
 
 
-async def test_delete_keeps_stored_file_when_commit_fails(client, session, storage_dir, monkeypatch):
+async def test_delete_keeps_stored_file_when_commit_fails(
+    client, session, storage_dir, monkeypatch
+):
     """Регрессия B2: если коммит удаления упал, файл на диске должен остаться."""
     uploaded = await upload_sample(client)
     file_id = uploaded["id"]
@@ -53,7 +55,9 @@ async def test_delete_keeps_stored_file_when_commit_fails(client, session, stora
     await session.rollback()
 
     assert list(storage_dir.iterdir()) == stored_files, "stored file must survive a failed commit"
-    assert await repository.get(session, file_id) is not None, "db record must survive a failed commit"
+    assert await repository.get(session, file_id) is not None, (
+        "db record must survive a failed commit"
+    )
 
 
 async def test_delete_restores_file_when_commit_fails(client, session, storage_dir, monkeypatch):
@@ -74,7 +78,9 @@ async def test_delete_restores_file_when_commit_fails(client, session, storage_d
     assert await repository.get(session, uploaded["id"]) is not None
 
 
-async def test_delete_succeeds_when_final_storage_removal_fails(client, session, storage_dir, monkeypatch):
+async def test_delete_succeeds_when_final_storage_removal_fails(
+    client, session, storage_dir, monkeypatch
+):
     from src.files import storage
 
     uploaded = await upload_sample(client)

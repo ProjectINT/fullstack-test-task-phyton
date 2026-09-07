@@ -31,7 +31,9 @@ async def seed_stored_file(session, storage_dir, content: bytes = b"hello\nworld
 
 
 async def load_alerts(session, file_id: str) -> list[Alert]:
-    return list((await session.execute(select(Alert).where(Alert.file_id == file_id))).scalars().all())
+    return list(
+        (await session.execute(select(Alert).where(Alert.file_id == file_id))).scalars().all()
+    )
 
 
 async def test_process_file_with_missing_stored_file_marks_failed(session, storage_dir):

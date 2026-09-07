@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, JSON, String, func
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.core.db import Base, status_column
@@ -24,7 +25,7 @@ class StoredFile(Base):
     )
     scan_status: Mapped[ScanStatus | None] = mapped_column(status_column(ScanStatus), nullable=True)
     scan_details: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     requires_attention: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

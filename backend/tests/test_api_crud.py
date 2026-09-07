@@ -17,12 +17,15 @@ async def upload_sample(client, title: str = "sample") -> dict:
     return response.json()
 
 
-@pytest.mark.parametrize("method,url_suffix,kwargs", [
-    ("GET", "", {}),
-    ("PATCH", "", {"json": {"title": "renamed"}}),
-    ("DELETE", "", {}),
-    ("GET", "/download", {}),
-])
+@pytest.mark.parametrize(
+    "method,url_suffix,kwargs",
+    [
+        ("GET", "", {}),
+        ("PATCH", "", {"json": {"title": "renamed"}}),
+        ("DELETE", "", {}),
+        ("GET", "/download", {}),
+    ],
+)
 async def test_missing_file_returns_404(client, method, url_suffix, kwargs):
     response = await client.request(method, f"/files/{uuid4()}{url_suffix}", **kwargs)
 

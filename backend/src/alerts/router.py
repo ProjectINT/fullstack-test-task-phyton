@@ -14,7 +14,7 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
 @router.get("", response_model=list[AlertItem])
-async def list_alerts_view(session: SessionDep, pagination: PaginationDep):
+async def list_alerts_view(session: SessionDep, pagination: PaginationDep) -> list[AlertItem]:
     rows = await repository.list_alerts(session, limit=pagination.limit, offset=pagination.offset)
     return [
         AlertItem(
