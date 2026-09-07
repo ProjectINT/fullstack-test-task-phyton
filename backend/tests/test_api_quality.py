@@ -1,6 +1,6 @@
 """Шаг 3: пагинация limit/offset и enum'ы статусов в моделях/схемах."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import text
@@ -12,7 +12,7 @@ from src.files.models import StoredFile
 
 pytestmark = pytest.mark.asyncio
 
-BASE_TIME = datetime(2026, 1, 1, tzinfo=timezone.utc)
+BASE_TIME = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 def make_file(index: int) -> StoredFile:
@@ -97,9 +97,7 @@ async def test_enum_values_stored_as_values_not_names(session):
     session.add(Alert(file_id=file_item.id, level=AlertLevel.WARNING, message="check"))
     await session.commit()
 
-    raw = (
-        await session.execute(text("SELECT processing_status, scan_status FROM files"))
-    ).one()
+    raw = (await session.execute(text("SELECT processing_status, scan_status FROM files"))).one()
     assert raw == ("uploaded", "clean")
     raw_level = (await session.execute(text("SELECT level FROM alerts"))).scalar_one()
     assert raw_level == "warning"

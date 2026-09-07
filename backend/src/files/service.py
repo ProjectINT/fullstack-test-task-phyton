@@ -4,6 +4,7 @@ import mimetypes
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 from fastapi import UploadFile
@@ -61,7 +62,7 @@ class _TextStatsAnalyzer:
     def feed(self, chunk: bytes) -> None:
         self._consume(self._decoder.decode(chunk))
 
-    def finalize(self) -> dict:
+    def finalize(self) -> dict[str, Any]:
         self._consume(self._decoder.decode(b"", final=True))
         line_count = self._line_count
         if self._char_count and not self._ends_with_newline:
@@ -79,9 +80,9 @@ class _PdfPageAnalyzer:
     def feed(self, chunk: bytes) -> None:
         window = self._tail + chunk
         self._count += window.count(PDF_PAGE_MARKER)
-        self._tail = window[1 - len(PDF_PAGE_MARKER):]
+        self._tail = window[1 - len(PDF_PAGE_MARKER) :]
 
-    def finalize(self) -> dict:
+    def finalize(self) -> dict[str, Any]:
         return {"approx_page_count": max(self._count, 1)}
 
 
@@ -96,7 +97,7 @@ def _content_analyzer_for(mime_type: str) -> ContentAnalyzer | None:
     return None
 
 
-def _build_metadata(file_item: StoredFile, content_stats: dict) -> dict:
+def _build_metadata(file_item: StoredFile, content_stats: dict[str, Any]) -> dict[str, Any]:
     return {
         "extension": Path(file_item.original_name).suffix.lower(),
         "size_bytes": file_item.size,
@@ -105,7 +106,9 @@ def _build_metadata(file_item: StoredFile, content_stats: dict) -> dict:
     }
 
 
-async def _read_upload_chunks(upload_file: UploadFile, analyzer: ContentAnalyzer | None) -> AsyncIterator[bytes]:
+async def _read_upload_chunks(
+    upload_file: UploadFile, analyzer: ContentAnalyzer | None
+) -> AsyncIterator[bytes]:
     total = 0
     while chunk := await upload_file.read(storage.CHUNK_SIZE):
         total += len(chunk)
@@ -120,7 +123,11 @@ async def create_file(session: AsyncSession, title: str, upload_file: UploadFile
     file_id = str(uuid4())
     suffix = Path(upload_file.filename or "").suffix
     stored_name = f"{file_id}{suffix}"
-    mime_type = upload_file.content_type or mimetypes.guess_type(stored_name)[0] or "application/octet-stream"
+    mime_type = (
+        upload_file.content_type
+        or mimetypes.guess_type(stored_name)[0]
+        or "application/octet-stream"
+    )
 
     # Метаданные контента считаются в том же потоковом проходе, что и запись на диск, —
     # воркеру не приходится перечитывать файл.
@@ -143,7 +150,9 @@ async def create_file(session: AsyncSession, title: str, upload_file: UploadFile
             size=size,
             processing_status=ProcessingStatus.UPLOADED,
         )
-        file_item.metadata_json = _build_metadata(file_item, analyzer.finalize() if analyzer else {})
+        file_item.metadata_json = _build_metadata(
+            file_item, analyzer.finalize() if analyzer else {}
+        )
         repository.add(session, file_item)
         await session.commit()
         undo.pop_all()
@@ -191,7 +200,10 @@ def _scan_for_threats(file_item: StoredFile) -> None:
     if file_item.size > SUSPICIOUS_SIZE_BYTES:
         reasons.append("file is larger than 10 MB")
 
-    if extension == ".pdf" and file_item.mime_type not in {"application/pdf", "application/octet-stream"}:
+    if extension == ".pdf" and file_item.mime_type not in {
+        "application/pdf",
+        "application/octet-stream",
+    }:
         reasons.append("pdf extension does not match mime type")
 
     file_item.scan_status = ScanStatus.SUSPICIOUS if reasons else ScanStatus.CLEAN
@@ -206,7 +218,7 @@ async def _ensure_metadata(file_item: StoredFile) -> None:
         return
 
     analyzer = _content_analyzer_for(file_item.mime_type)
-    content_stats: dict = {}
+    content_stats: dict[str, Any] = {}
     if analyzer:
         async for chunk in storage.iter_chunks(file_item.stored_name):
             analyzer.feed(chunk)
@@ -263,6 +275,10 @@ async def mark_file_failed(session: AsyncSession, file_id: str, reason: str) -> 
     if not file_item.scan_status:
         file_item.scan_status = ScanStatus.FAILED
     file_item.scan_details = reason[:500]
-    alert = Alert(file_id=file_id, level=AlertLevel.CRITICAL, message=f"File processing failed: {reason}"[:500])
+    alert = Alert(
+        file_id=file_id,
+        level=AlertLevel.CRITICAL,
+        message=f"File processing failed: {reason}"[:500],
+    )
     alerts_repository.add(session, alert)
     await session.commit()

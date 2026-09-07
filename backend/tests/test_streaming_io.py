@@ -28,7 +28,9 @@ class ChunkRecordingUpload:
         return chunk
 
 
-async def seed_stored_file(session, storage_dir, content: bytes, mime_type: str, suffix: str) -> str:
+async def seed_stored_file(
+    session, storage_dir, content: bytes, mime_type: str, suffix: str
+) -> str:
     file_id = str(uuid4())
     stored_name = f"{file_id}{suffix}"
     (storage_dir / stored_name).write_bytes(content)
@@ -55,12 +57,16 @@ async def test_upload_is_read_in_chunks_not_whole(session, storage_dir, monkeypa
 
     file_item = await service.create_file(session, title="sample", upload_file=upload)
 
-    assert all(size == 4 for size in upload.read_sizes), "файл должен читаться только чанками CHUNK_SIZE"
+    assert all(size == 4 for size in upload.read_sizes), (
+        "файл должен читаться только чанками CHUNK_SIZE"
+    )
     assert file_item.size == len(content)
     assert storage.path_for(file_item.stored_name).read_bytes() == content
 
 
-async def test_upload_over_limit_returns_413_and_cleans_partial_file(client, storage_dir, monkeypatch):
+async def test_upload_over_limit_returns_413_and_cleans_partial_file(
+    client, storage_dir, monkeypatch
+):
     """Регрессия B4: лимит размера берётся из конфига, недописанный файл убирается с диска."""
     monkeypatch.setattr(settings, "max_file_size", 10)
 
@@ -115,7 +121,9 @@ async def test_text_metadata_counted_across_chunk_boundaries(session, storage_di
 
 async def test_pdf_page_count_across_chunk_boundaries(session, storage_dir, monkeypatch):
     """Регрессия B4/B5: маркер страницы, попавший на границу чанков, должен учитываться."""
-    monkeypatch.setattr(storage, "CHUNK_SIZE", 7)  # меньше длины маркера — каждый маркер режется границей
+    monkeypatch.setattr(
+        storage, "CHUNK_SIZE", 7
+    )  # меньше длины маркера — каждый маркер режется границей
     content = b"%PDF-1.4 " + b"/Type /Page ...obj... " * 3 + b"trailer"
     file_id = await seed_stored_file(session, storage_dir, content, "application/pdf", ".pdf")
 
@@ -125,7 +133,9 @@ async def test_pdf_page_count_across_chunk_boundaries(session, storage_dir, monk
     assert file_item.metadata_json["approx_page_count"] == 3
 
 
-async def test_upload_computes_metadata_in_the_same_streaming_pass(session, storage_dir, monkeypatch):
+async def test_upload_computes_metadata_in_the_same_streaming_pass(
+    session, storage_dir, monkeypatch
+):
     """Шаг 4: метаданные контента считаются в том же потоковом проходе, что и запись
     на диск, — включая multibyte-символы на границах чанков."""
     monkeypatch.setattr(storage, "CHUNK_SIZE", 3)
@@ -143,7 +153,9 @@ async def test_upload_computes_metadata_in_the_same_streaming_pass(session, stor
     }
 
 
-async def test_worker_does_not_reread_file_when_metadata_precomputed(session, storage_dir, monkeypatch):
+async def test_worker_does_not_reread_file_when_metadata_precomputed(
+    session, storage_dir, monkeypatch
+):
     """Шаг 4: если метаданные посчитаны при загрузке, воркер не перечитывает файл."""
     content = b"%PDF-1.4 /Type /Page one /Type /Page two"
     upload = ChunkRecordingUpload("sample.pdf", content, "application/pdf")

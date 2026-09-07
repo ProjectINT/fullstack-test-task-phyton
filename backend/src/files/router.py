@@ -16,8 +16,9 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
 @router.get("", response_model=list[FileItem])
-async def list_files_view(session: SessionDep, pagination: PaginationDep):
-    return await service.list_files(session, limit=pagination.limit, offset=pagination.offset)
+async def list_files_view(session: SessionDep, pagination: PaginationDep) -> list[FileItem]:
+    files = await service.list_files(session, limit=pagination.limit, offset=pagination.offset)
+    return [FileItem.model_validate(file) for file in files]
 
 
 @router.post("", response_model=FileItem, status_code=201)
@@ -25,24 +26,26 @@ async def create_file_view(
     session: SessionDep,
     title: str = Form(...),
     file: UploadFile = File(...),
-):
+) -> FileItem:
     file_item = await service.create_file(session, title=title, upload_file=file)
     process_file.delay(file_item.id)
-    return file_item
+    return FileItem.model_validate(file_item)
 
 
 @router.get("/{file_id}", response_model=FileItem)
-async def get_file_view(file_id: str, session: SessionDep):
-    return await service.get_file(session, file_id)
+async def get_file_view(file_id: str, session: SessionDep) -> FileItem:
+    file_item = await service.get_file(session, file_id)
+    return FileItem.model_validate(file_item)
 
 
 @router.patch("/{file_id}", response_model=FileItem)
-async def update_file_view(file_id: str, payload: FileUpdate, session: SessionDep):
-    return await service.update_file(session, file_id=file_id, title=payload.title)
+async def update_file_view(file_id: str, payload: FileUpdate, session: SessionDep) -> FileItem:
+    file_item = await service.update_file(session, file_id=file_id, title=payload.title)
+    return FileItem.model_validate(file_item)
 
 
 @router.get("/{file_id}/download")
-async def download_file_view(file_id: str, session: SessionDep):
+async def download_file_view(file_id: str, session: SessionDep) -> FileResponse:
     file_item, stored_path = await service.get_file_for_download(session, file_id)
     return FileResponse(
         path=stored_path,
@@ -52,5 +55,5 @@ async def download_file_view(file_id: str, session: SessionDep):
 
 
 @router.delete("/{file_id}", status_code=204)
-async def delete_file_view(file_id: str, session: SessionDep):
+async def delete_file_view(file_id: str, session: SessionDep) -> None:
     await service.delete_file(session, file_id)

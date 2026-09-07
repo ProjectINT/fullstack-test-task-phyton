@@ -1,0 +1,23 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/bin/python",
+
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+
+  "ruff.importStrategy": "fromEnvironment",
+  "ruff.interpreter": ["${workspaceFolder}/backend/.venv/bin/python"],
+  "ruff.configuration": "${workspaceFolder}/backend/pyproject.toml",
+
+  "mypy.dmypyExecutable": "${workspaceFolder}/backend/.venv/bin/dmypy",
+  "mypy.configFile": "backend/pyproject.toml",
+  "mypy.targets": ["backend/src"],
+  "mypy.runUsingActiveInterpreter": true,
+
+  "python.analysis.typeCheckingMode": "off"
+}
