@@ -4,6 +4,7 @@ import mimetypes
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 from fastapi import UploadFile
@@ -61,7 +62,7 @@ class _TextStatsAnalyzer:
     def feed(self, chunk: bytes) -> None:
         self._consume(self._decoder.decode(chunk))
 
-    def finalize(self) -> dict:
+    def finalize(self) -> dict[str, Any]:
         self._consume(self._decoder.decode(b"", final=True))
         line_count = self._line_count
         if self._char_count and not self._ends_with_newline:
@@ -81,7 +82,7 @@ class _PdfPageAnalyzer:
         self._count += window.count(PDF_PAGE_MARKER)
         self._tail = window[1 - len(PDF_PAGE_MARKER) :]
 
-    def finalize(self) -> dict:
+    def finalize(self) -> dict[str, Any]:
         return {"approx_page_count": max(self._count, 1)}
 
 
@@ -96,7 +97,7 @@ def _content_analyzer_for(mime_type: str) -> ContentAnalyzer | None:
     return None
 
 
-def _build_metadata(file_item: StoredFile, content_stats: dict) -> dict:
+def _build_metadata(file_item: StoredFile, content_stats: dict[str, Any]) -> dict[str, Any]:
     return {
         "extension": Path(file_item.original_name).suffix.lower(),
         "size_bytes": file_item.size,
@@ -217,7 +218,7 @@ async def _ensure_metadata(file_item: StoredFile) -> None:
         return
 
     analyzer = _content_analyzer_for(file_item.mime_type)
-    content_stats: dict = {}
+    content_stats: dict[str, Any] = {}
     if analyzer:
         async for chunk in storage.iter_chunks(file_item.stored_name):
             analyzer.feed(chunk)

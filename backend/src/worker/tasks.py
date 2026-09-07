@@ -1,5 +1,9 @@
 import asyncio
 import logging
+from typing import Any
+
+from billiard.einfo import ExceptionInfo
+from celery import Task
 
 from src.core.db import worker_session
 from src.files import service as files_service
@@ -18,7 +22,7 @@ async def _mark_file_failed(file_id: str, reason: str) -> None:
         await files_service.mark_file_failed(session, file_id, reason)
 
 
-class FileProcessingTask(celery_app.Task):
+class FileProcessingTask(Task):  # type: ignore[type-arg]
     """B9: транзиентные ошибки ретраятся с бэкоффом; после исчерпания ретраев
     файл переводится в failed и создаётся critical-алерт."""
 
@@ -26,7 +30,14 @@ class FileProcessingTask(celery_app.Task):
     max_retries = 3
     retry_backoff = True
 
-    def on_failure(self, exc, task_id, args, kwargs, einfo) -> None:
+    def on_failure(
+        self,
+        exc: Exception,
+        task_id: str,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        einfo: ExceptionInfo,
+    ) -> None:
         file_id = args[0] if args else kwargs.get("file_id")
         if not file_id:
             return

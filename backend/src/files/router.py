@@ -17,7 +17,8 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 @router.get("", response_model=list[FileItem])
 async def list_files_view(session: SessionDep, pagination: PaginationDep) -> list[FileItem]:
-    return await service.list_files(session, limit=pagination.limit, offset=pagination.offset)
+    files = await service.list_files(session, limit=pagination.limit, offset=pagination.offset)
+    return [FileItem.model_validate(file) for file in files]
 
 
 @router.post("", response_model=FileItem, status_code=201)
@@ -28,18 +29,19 @@ async def create_file_view(
 ) -> FileItem:
     file_item = await service.create_file(session, title=title, upload_file=file)
     process_file.delay(file_item.id)
-    return file_item
+    return FileItem.model_validate(file_item)
 
 
 @router.get("/{file_id}", response_model=FileItem)
 async def get_file_view(file_id: str, session: SessionDep) -> FileItem:
-    file = await service.get_file(session, file_id)
-    return file
+    file_item = await service.get_file(session, file_id)
+    return FileItem.model_validate(file_item)
 
 
 @router.patch("/{file_id}", response_model=FileItem)
 async def update_file_view(file_id: str, payload: FileUpdate, session: SessionDep) -> FileItem:
-    return await service.update_file(session, file_id=file_id, title=payload.title)
+    file_item = await service.update_file(session, file_id=file_id, title=payload.title)
+    return FileItem.model_validate(file_item)
 
 
 @router.get("/{file_id}/download")
